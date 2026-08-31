@@ -14,7 +14,7 @@ The repository is being built phase by phase. GitHub is the source of truth.
 | Server and realtime boundary | Implemented |
 | Mobile foundation | Implemented |
 | Asset documentation system | Implemented |
-| 3D world | Planned |
+| 3D world | In progress |
 | Character customization | Planned |
 | Multiplayer rooms | Planned |
 | Persistent homes | Planned |
@@ -31,7 +31,7 @@ The repository is being built phase by phase. GitHub is the source of truth.
 - Expo and React Native for the mobile client
 - Node.js server boundary for realtime transport
 - PostgreSQL adapter boundary for persistent state
-- Three.js, React Three Fiber, Drei, and Rapier will be introduced in the 3D world phase
+- Three.js, React Three Fiber, Drei, and Rapier for the web world renderer
 
 ## Architecture
 
