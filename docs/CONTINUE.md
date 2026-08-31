@@ -40,4 +40,4 @@ Do not download unverified assets. Record every source, creator, license, URL, a
 
 ## Known issues
 
-The web and mobile clients are foundations, not gameplay. The server responds to health checks but does not yet create sessions or synchronize players. The memory adapter is not durable.
+The web and mobile clients are foundations, not gameplay. The server responds to health checks but does not yet create sessions or synchronize players. The memory adapter is not durable. The CI workflow is prepared locally but its `.github/workflows` write was rejected by a GitHub edge filter; local dependency verification also needs a package mirror that can serve the pinned Next.js package.
