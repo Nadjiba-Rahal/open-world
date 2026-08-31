@@ -2,13 +2,15 @@
 
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, RigidBody, CapsuleCollider, CuboidCollider, type RapierRigidBody } from "@react-three/rapier";
-import { Sky } from "@react-three/drei";
-import { createDefaultAppearance, type CharacterAppearance } from "@afterlight/shared";
+import { Sky, Text } from "@react-three/drei";
+import { createDefaultAppearance, type CharacterAppearance, type MovementState, type PlayerSnapshot } from "@afterlight/shared";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from "react";
 import type { Group, PerspectiveCamera } from "three";
 import { MathUtils, Vector3 } from "three";
 import { CharacterAvatar } from "../character/CharacterAvatar";
 import { CharacterCreator } from "../character/CharacterCreator";
+import { MultiplayerPanel } from "../multiplayer/MultiplayerPanel";
+import { useMultiplayerSession } from "../multiplayer/useMultiplayerSession";
 
 const WALK_SPEED = 3.8;
 const SPRINT_SPEED = 6.3;
@@ -24,15 +26,17 @@ interface PlayerControllerProps {
   cameraInput: MutableRefObject<CameraInput>;
   onInteract: (position: Vector3) => void;
   appearance: CharacterAppearance;
+  onPlayerUpdate?: (update: Pick<PlayerSnapshot, "position" | "rotation" | "movement">) => void;
 }
 
-function PlayerController({ cameraInput, onInteract, appearance }: PlayerControllerProps) {
+function PlayerController({ cameraInput, onInteract, appearance, onPlayerUpdate }: PlayerControllerProps) {
   const body = useRef<RapierRigidBody>(null);
   const model = useRef<Group>(null);
   const { camera } = useThree();
   const keys = useRef(new Set<string>());
   const lastPosition = useRef(new Vector3(0, 1.2, 7));
   const cameraTarget = useRef(new Vector3());
+  const syncClock = useRef(0);
 
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
@@ -59,6 +63,7 @@ function PlayerController({ cameraInput, onInteract, appearance }: PlayerControl
     if (input.lengthSq() > 0) input.normalize();
     input.applyAxisAngle(new Vector3(0, 1, 0), cameraInput.current.yaw);
     const speed = keys.current.has("shift") ? SPRINT_SPEED : WALK_SPEED;
+    const movement: MovementState = input.lengthSq() === 0 ? "idle" : keys.current.has("shift") ? "sprinting" : "walking";
     const velocity = body.current.linvel();
     body.current.setLinvel({ x: input.x * speed, y: velocity.y, z: input.z * speed }, true);
 
@@ -78,6 +83,11 @@ function PlayerController({ cameraInput, onInteract, appearance }: PlayerControl
     camera.position.lerp(lastPosition.current.clone().add(orbit), Math.min(1, delta * 5));
     cameraTarget.current.copy(lastPosition.current).add(new Vector3(0, 1.1, 0));
     (camera as PerspectiveCamera).lookAt(cameraTarget.current);
+    syncClock.current += delta;
+    if (onPlayerUpdate && syncClock.current >= 0.1) {
+      syncClock.current = 0;
+      onPlayerUpdate({ position: { x: position.x, y: position.y, z: position.z }, rotation: { y: model.current?.rotation.y ?? 0 }, movement });
+    }
   });
 
   return (
@@ -85,6 +95,35 @@ function PlayerController({ cameraInput, onInteract, appearance }: PlayerControl
       <CapsuleCollider args={[0.55, 0.45]} />
       <CharacterAvatar appearance={appearance} groupRef={model} />
     </RigidBody>
+  );
+}
+
+function RemotePlayer({ player }: { player: PlayerSnapshot }) {
+  const model = useRef<Group>(null);
+  const target = useRef(new Vector3(player.position.x, player.position.y, player.position.z));
+  const phase = useRef((player.id.charCodeAt(0) % 10) / 10);
+
+  useFrame((_, delta) => {
+    if (!model.current) return;
+    target.current.set(player.position.x, player.position.y, player.position.z);
+    model.current.position.lerp(target.current, Math.min(1, delta * 10));
+    const bob = player.movement === "idle" ? 0 : Math.sin(performance.now() / 130 + phase.current) * 0.035;
+    model.current.position.y += (bob - (model.current.userData.lastBob ?? 0));
+    model.current.userData.lastBob = bob;
+    const targetRotation = player.rotation.y;
+    let difference = targetRotation - model.current.rotation.y;
+    while (difference > Math.PI) difference -= Math.PI * 2;
+    while (difference < -Math.PI) difference += Math.PI * 2;
+    model.current.rotation.y += difference * Math.min(1, delta * 12);
+  });
+
+  return (
+    <group ref={model} position={[player.position.x, player.position.y, player.position.z]}>
+      <CharacterAvatar appearance={player.appearance} />
+      <Text position={[0, 2.15, 0]} fontSize={0.22} color="#fff6d9" outlineColor="#17201b" outlineWidth={0.025} anchorX="center" anchorY="middle">
+        {player.displayName}
+      </Text>
+    </group>
   );
 }
 
@@ -139,7 +178,7 @@ function LumenfallWorld() {
   );
 }
 
-function WorldScene({ cameraInput, onInteract, appearance }: PlayerControllerProps) {
+function WorldScene({ cameraInput, onInteract, appearance, onPlayerUpdate, remotePlayers }: PlayerControllerProps & { remotePlayers: PlayerSnapshot[] }) {
   return (
     <>
       <color attach="background" args={["#9fb5aa"]} />
@@ -149,7 +188,8 @@ function WorldScene({ cameraInput, onInteract, appearance }: PlayerControllerPro
       <directionalLight castShadow position={[-8, 12, 6]} intensity={2.2} color="#ffe3ad" shadow-mapSize={[2048, 2048]} />
       <Physics gravity={[0, -16, 0]}>
         <LumenfallWorld />
-        <PlayerController cameraInput={cameraInput} onInteract={onInteract} appearance={appearance} />
+        <PlayerController cameraInput={cameraInput} onInteract={onInteract} appearance={appearance} onPlayerUpdate={onPlayerUpdate} />
+        {remotePlayers.map((player) => <RemotePlayer key={player.id} player={player} />)}
       </Physics>
     </>
   );
@@ -161,6 +201,10 @@ export default function LumenfallScene() {
   const [notice, setNotice] = useState("");
   const [appearance, setAppearance] = useState<CharacterAppearance>(() => createDefaultAppearance());
   const [saved, setSaved] = useState(false);
+  const multiplayer = useMultiplayerSession(appearance);
+  const onPlayerUpdate = useCallback((update: Pick<PlayerSnapshot, "position" | "rotation" | "movement">) => {
+    multiplayer.updatePlayer(update);
+  }, [multiplayer.updatePlayer]);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("afterlight.character.appearance");
@@ -210,12 +254,12 @@ export default function LumenfallScene() {
   }, []);
 
   const pointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest(".creator")) return;
+    if ((event.target as HTMLElement).closest(".creator, .multiplayer")) return;
     drag.current = { active: true, x: event.clientX, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const pointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!drag.current.active || (event.target as HTMLElement).closest(".creator")) return;
+    if (!drag.current.active || (event.target as HTMLElement).closest(".creator, .multiplayer")) return;
     const dx = event.clientX - drag.current.x;
     const dy = event.clientY - drag.current.y;
     drag.current.x = event.clientX;
@@ -228,7 +272,7 @@ export default function LumenfallScene() {
   return (
     <div className="scene" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
       <Canvas shadows camera={{ position: [0, 5, 15], fov: 54 }} dpr={[1, 1.75]}>
-        <WorldScene cameraInput={cameraInput} onInteract={onInteract} appearance={appearance} />
+        <WorldScene cameraInput={cameraInput} onInteract={onInteract} appearance={appearance} onPlayerUpdate={onPlayerUpdate} remotePlayers={multiplayer.players.filter((player) => player.id !== multiplayer.selfId)} />
       </Canvas>
       <div className="scene-ui">
         <div className="scene-top">
@@ -236,6 +280,16 @@ export default function LumenfallScene() {
           <div className="location"><strong>Lumenfall</strong><span>Southern approach</span></div>
         </div>
         <CharacterCreator appearance={appearance} onChange={(next) => { setAppearance(next); setSaved(false); }} onSave={saveAppearance} onLoad={loadAppearance} saved={saved} />
+        <MultiplayerPanel
+          status={multiplayer.status}
+          session={multiplayer.session}
+          selfId={multiplayer.selfId}
+          players={multiplayer.players}
+          error={multiplayer.error}
+          onCreate={multiplayer.createSession}
+          onJoin={multiplayer.joinSession}
+          onLeave={multiplayer.leaveSession}
+        />
         <div className="scene-bottom">
           <div className="objective"><p className="objective-label">Current thread</p><p>Find the lantern stone near the town path.</p></div>
           <div className="controls"><span className="desktop-only"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move&nbsp;&nbsp; <kbd>SHIFT</kbd> sprint&nbsp;&nbsp; <kbd>E</kbd> interact&nbsp;&nbsp;</span> drag to look</div>

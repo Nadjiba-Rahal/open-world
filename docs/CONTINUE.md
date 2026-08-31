@@ -12,7 +12,7 @@ Afterlight is a stylized multiplayer 3D fantasy world. The first playable space 
 
 ## What is the current phase?
 
-Phase 2 is complete. Phase 3 — Private Multiplayer Sessions — is not implemented. Read `docs/PHASE_3_MULTIPLAYER.md` before any future multiplayer work.
+Phase 2 is complete. Phase 3's first private-session milestone is implemented. Read `docs/PHASE_3_MULTIPLAYER.md` before extending multiplayer.
 
 ## Where is the character system?
 
@@ -45,8 +45,8 @@ The reserved tree is `assets/`. No external game assets are included. Read `docs
 - The avatar is geometric placeholder art and has no proper rig or animation clips.
 - Browser storage is a temporary appearance persistence adapter.
 - `packages/database` contains an in-memory adapter, not PostgreSQL persistence.
-- `packages/networking` contains a transport interface, not a live multiplayer server.
-- `apps/server` only serves a health endpoint.
+- `packages/networking` contains the replaceable transport interface and browser WebSocket transport.
+- `apps/server` serves `/health` and a standalone `/ws` realtime endpoint with an in-memory authoritative session registry.
 - The mobile app is a foundation screen, not mobile gameplay.
 
 ## What is currently broken?
@@ -63,9 +63,9 @@ Build verification has not been established. The package mirror blocks the pinne
 - Do not add unverified or copyrighted assets.
 - Do not begin Phase 4 systems while Phase 3 is incomplete.
 
-## What should Phase 3 implement?
+## What does Phase 3 currently implement?
 
-Implement only private multiplayer sessions for 2–8 players: create a session, join by invite/session code, join a friend, leave, see real players, synchronize position/rotation/basic movement state, display player names, and handle disconnect/reconnect. Keep Lumenfall as the base world. Exclude public matchmaking, MMO scale, combat, guilds, trading, and voice chat. Full requirements are in `docs/PHASE_3_MULTIPLAYER.md`.
+Private multiplayer sessions for 2–8 players are implemented: create a session, join by invite/session code, join a friend, leave, see real players, synchronize position/rotation/basic movement state, display player names, and handle disconnect/reconnect. Keep Lumenfall as the base world. Exclude public matchmaking, MMO scale, combat, guilds, trading, and voice chat. Full requirements are in `docs/PHASE_3_MULTIPLAYER.md`.
 
 Realtime state must remain separate from persistent state. Realtime includes position, rotation, movement/animation state, and session membership. Persistent state includes character, appearance, inventory, quests, home, and progression. Inspect `packages/networking` and `packages/shared` before adding a transport.
 
@@ -93,17 +93,17 @@ Document every missing asset with format, destination, search terms, rig require
 
 ## Handoff state
 
-The verified GitHub head before this documentation update is Phase 2 commit `339f0583f7a70283e8e92d7b5d8b44b066f28f4d`. Documentation changes must be committed and pushed after editing.
+The GitHub head before the Phase 3 implementation is `c9fbb4e881d1089bd89607b8e38a0b707ebbaaa9`. The current Phase 3 implementation uses an in-memory session registry and standalone WebSocket transport; no movement is written to the database.
 
 ## NEXT ACTION
 
 Phase 1 is complete.
 Phase 2 is complete.
-Phase 3 has NOT been implemented.
+Phase 3 core private sessions have been implemented.
 
 The next developer should begin with:
 
-Phase 3 — Private Multiplayer Sessions
+Phase 3 — Private Multiplayer Sessions: browser verification and hardening
 
 Before coding:
 1. Read README.md

@@ -1,16 +1,32 @@
-export const CURRENT_PHASE = "foundation" as const;
+export const CURRENT_PHASE = "multiplayer" as const;
 export const PHASES = ["foundation", "world", "character", "multiplayer", "home", "gameplay", "exploration", "social", "progression", "mobile", "optimization"] as const;
 export type BuildPhase = (typeof PHASES)[number];
 export type WorldId = "lumenfall" | "moonwood" | "player-home" | "mystery";
 export type PlayerId = string & { readonly __brand: "PlayerId" };
 export interface CharacterAppearance { skinTone: string; bodyType: string; face: string; eyes: string; hair: string; hairColor: string; outfit: string; accessories: string[]; }
-export interface PlayerSnapshot { id: PlayerId; displayName: string; worldId: WorldId; position: { x: number; y: number; z: number }; rotation: { y: number }; }
+export type MovementState = "idle" | "walking" | "sprinting";
+export interface PlayerSnapshot {
+  id: PlayerId;
+  displayName: string;
+  worldId: WorldId;
+  appearance: CharacterAppearance;
+  position: { x: number; y: number; z: number };
+  rotation: { y: number };
+  movement: MovementState;
+  connected: boolean;
+}
+export interface SessionDescriptor { sessionId: string; inviteCode: string; worldId: WorldId; maxPlayers: number; inviteOnly: true; }
 export type RealtimeMessage =
-  | { type: "session.create"; requestId: string }
-  | { type: "session.join"; requestId: string; sessionId: string }
-  | { type: "session.leave"; requestId: string; sessionId: string }
-  | { type: "player.snapshot"; player: PlayerSnapshot }
-  | { type: "player.emote"; playerId: PlayerId; emote: string };
+  | { type: "session.create"; requestId: string; displayName: string; appearance: CharacterAppearance }
+  | { type: "session.join"; requestId: string; inviteCode: string; displayName: string; appearance: CharacterAppearance; reconnectToken?: string }
+  | { type: "session.leave"; requestId: string }
+  | { type: "player.update"; player: Pick<PlayerSnapshot, "position" | "rotation" | "movement"> }
+  | { type: "session.created"; requestId: string; session: SessionDescriptor; self: PlayerSnapshot; players: PlayerSnapshot[]; reconnectToken: string }
+  | { type: "session.joined"; requestId: string; session: SessionDescriptor; self: PlayerSnapshot; players: PlayerSnapshot[]; reconnectToken: string }
+  | { type: "player.joined"; player: PlayerSnapshot }
+  | { type: "player.updated"; player: PlayerSnapshot }
+  | { type: "player.left"; playerId: PlayerId; reason: "left" | "disconnected" }
+  | { type: "session.error"; requestId?: string; code: "invalid" | "not_found" | "full" | "not_member"; message: string };
 
 export const CHARACTER_OPTIONS = {
   skinTone: [

@@ -2,7 +2,7 @@
 
 Afterlight is a stylized multiplayer 3D fantasy world where friends explore, build, craft, cook, discover hidden worlds, and create their own adventures.
 
-The repository is being built phase by phase. Phase 2 is complete, Phase 3 has not started, and GitHub is the source of truth.
+The repository is being built phase by phase. Phase 3 is the current implementation focus, and GitHub is the source of truth.
 
 ## Feature status
 
@@ -17,7 +17,7 @@ The repository is being built phase by phase. Phase 2 is complete, Phase 3 has n
 | Lumenfall 3D world | Implemented |
 | Data-driven character creator | Implemented |
 | Browser appearance save/load | Implemented (temporary) |
-| Multiplayer rooms | Planned |
+| Multiplayer rooms | Implemented (private Phase 3 milestone) |
 | Persistent homes | Planned |
 | Inventory, crafting, and cooking | Planned |
 | Quests and NPCs | Planned |
@@ -29,7 +29,7 @@ The repository is being built phase by phase. Phase 2 is complete, Phase 3 has n
 
 **Phase 2 complete.** The web client has a small playable Lumenfall scene and a data-driven placeholder humanoid whose appearance can be edited live and saved or loaded in the browser.
 
-**Next: Phase 3 — Private Multiplayer Sessions.** Multiplayer is not implemented. The server currently exposes only a health endpoint; there are no rooms, invites, synchronized players, or reconnect handling.
+**Phase 3 in progress.** The first private-session milestone is implemented: create or join a 2–8 player invite-only room, see shared player avatars and names, synchronize movement/rotation/basic movement state, leave, and reconnect after a short disconnect. The realtime server is standalone and authoritative for room membership and movement bounds.
 
 ## Tech stack
 
@@ -75,7 +75,7 @@ pnpm install
 pnpm dev:web
 ~~~
 
-In a second terminal, run the server boundary with pnpm dev:server. The web app runs at http://localhost:3000 and the server health endpoint runs at http://localhost:3001/health.
+In a second terminal, run the realtime server boundary with pnpm dev:server. The web app runs at http://localhost:3000, the server health endpoint runs at http://localhost:3001/health, and the WebSocket endpoint is ws://localhost:3001/ws.
 
 ## Environment variables
 
@@ -96,7 +96,7 @@ The current character is geometric placeholder art. Character appearance persist
 1. Phase 0: foundation and contracts
 2. Phase 1: small, detailed 3D Lumenfall environment
 3. Phase 2: data-driven character creator and provisional save/load
-4. Phase 3: private multiplayer sessions
+4. Phase 3: private multiplayer sessions (current)
 5. Phase 4: persistent homes and cooperative building
 6. Phase 5: inventory, crafting, cooking, quests, and NPCs
 7. Phase 6: Moonwood exploration and discovery
