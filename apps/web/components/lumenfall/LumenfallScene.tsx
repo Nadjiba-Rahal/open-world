@@ -3,9 +3,12 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, RigidBody, CapsuleCollider, CuboidCollider, type RapierRigidBody } from "@react-three/rapier";
 import { Sky } from "@react-three/drei";
+import { createDefaultAppearance, type CharacterAppearance } from "@afterlight/shared";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from "react";
 import type { Group, PerspectiveCamera } from "three";
 import { MathUtils, Vector3 } from "three";
+import { CharacterAvatar } from "../character/CharacterAvatar";
+import { CharacterCreator } from "../character/CharacterCreator";
 
 const WALK_SPEED = 3.8;
 const SPRINT_SPEED = 6.3;
@@ -20,9 +23,10 @@ interface CameraInput {
 interface PlayerControllerProps {
   cameraInput: MutableRefObject<CameraInput>;
   onInteract: (position: Vector3) => void;
+  appearance: CharacterAppearance;
 }
 
-function PlayerController({ cameraInput, onInteract }: PlayerControllerProps) {
+function PlayerController({ cameraInput, onInteract, appearance }: PlayerControllerProps) {
   const body = useRef<RapierRigidBody>(null);
   const model = useRef<Group>(null);
   const { camera } = useThree();
@@ -79,21 +83,7 @@ function PlayerController({ cameraInput, onInteract }: PlayerControllerProps) {
   return (
     <RigidBody ref={body} colliders={false} position={[0, 1.2, 7]} enabledRotations={[false, false, false]} linearDamping={5} lockRotations>
       <CapsuleCollider args={[0.55, 0.45]} />
-      <group ref={model}>
-        <mesh castShadow position={[0, 0.2, 0]}>
-          <capsuleGeometry args={[0.42, 0.85, 6, 12]} />
-          <meshStandardMaterial color="#c7a77b" roughness={0.9} />
-        </mesh>
-        <mesh castShadow position={[0, 1.05, 0]}>
-          <sphereGeometry args={[0.34, 16, 12]} />
-          <meshStandardMaterial color="#d9b88c" roughness={0.8} />
-        </mesh>
-        <mesh castShadow position={[0, 1.3, 0]}>
-          <coneGeometry args={[0.48, 0.48, 8]} />
-          <meshStandardMaterial color="#354d43" roughness={0.85} />
-        </mesh>
-        {/* TODO(ASSET): Replace this geometric character placeholder with the licensed rigged player GLB. */}
-      </group>
+      <CharacterAvatar appearance={appearance} groupRef={model} />
     </RigidBody>
   );
 }
@@ -149,7 +139,7 @@ function LumenfallWorld() {
   );
 }
 
-function WorldScene({ cameraInput, onInteract }: PlayerControllerProps) {
+function WorldScene({ cameraInput, onInteract, appearance }: PlayerControllerProps) {
   return (
     <>
       <color attach="background" args={["#9fb5aa"]} />
@@ -159,7 +149,7 @@ function WorldScene({ cameraInput, onInteract }: PlayerControllerProps) {
       <directionalLight castShadow position={[-8, 12, 6]} intensity={2.2} color="#ffe3ad" shadow-mapSize={[2048, 2048]} />
       <Physics gravity={[0, -16, 0]}>
         <LumenfallWorld />
-        <PlayerController cameraInput={cameraInput} onInteract={onInteract} />
+        <PlayerController cameraInput={cameraInput} onInteract={onInteract} appearance={appearance} />
       </Physics>
     </>
   );
@@ -169,6 +159,45 @@ export default function LumenfallScene() {
   const cameraInput = useRef<CameraInput>({ yaw: 0, pitch: 0 });
   const drag = useRef({ active: false, x: 0, y: 0 });
   const [notice, setNotice] = useState("");
+  const [appearance, setAppearance] = useState<CharacterAppearance>(() => createDefaultAppearance());
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("afterlight.character.appearance");
+    if (!stored) return;
+    try {
+      const candidate = JSON.parse(stored) as Partial<CharacterAppearance>;
+      setAppearance({
+        ...createDefaultAppearance(),
+        ...candidate,
+        accessories: Array.isArray(candidate.accessories) ? candidate.accessories : createDefaultAppearance().accessories
+      });
+      setSaved(true);
+    } catch {
+      window.localStorage.removeItem("afterlight.character.appearance");
+    }
+  }, []);
+
+  const saveAppearance = useCallback(() => {
+    window.localStorage.setItem("afterlight.character.appearance", JSON.stringify(appearance));
+    setSaved(true);
+  }, [appearance]);
+
+  const loadAppearance = useCallback(() => {
+    const stored = window.localStorage.getItem("afterlight.character.appearance");
+    if (!stored) return;
+    try {
+      const candidate = JSON.parse(stored) as Partial<CharacterAppearance>;
+      setAppearance({
+        ...createDefaultAppearance(),
+        ...candidate,
+        accessories: Array.isArray(candidate.accessories) ? candidate.accessories : createDefaultAppearance().accessories
+      });
+      setSaved(true);
+    } catch {
+      setSaved(false);
+    }
+  }, []);
 
   const onInteract = useCallback((position: Vector3) => {
     if (position.distanceTo(STONE_POSITION) <= INTERACTION_DISTANCE) {
@@ -181,11 +210,12 @@ export default function LumenfallScene() {
   }, []);
 
   const pointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest(".creator")) return;
     drag.current = { active: true, x: event.clientX, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const pointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!drag.current.active) return;
+    if (!drag.current.active || (event.target as HTMLElement).closest(".creator")) return;
     const dx = event.clientX - drag.current.x;
     const dy = event.clientY - drag.current.y;
     drag.current.x = event.clientX;
@@ -198,13 +228,14 @@ export default function LumenfallScene() {
   return (
     <div className="scene" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
       <Canvas shadows camera={{ position: [0, 5, 15], fov: 54 }} dpr={[1, 1.75]}>
-        <WorldScene cameraInput={cameraInput} onInteract={onInteract} />
+        <WorldScene cameraInput={cameraInput} onInteract={onInteract} appearance={appearance} />
       </Canvas>
       <div className="scene-ui">
         <div className="scene-top">
           <div className="brand">AFTERLIGHT<small>PHASE 1 / LUMENFALL</small></div>
           <div className="location"><strong>Lumenfall</strong><span>Southern approach</span></div>
         </div>
+        <CharacterCreator appearance={appearance} onChange={(next) => { setAppearance(next); setSaved(false); }} onSave={saveAppearance} onLoad={loadAppearance} saved={saved} />
         <div className="scene-bottom">
           <div className="objective"><p className="objective-label">Current thread</p><p>Find the lantern stone near the town path.</p></div>
           <div className="controls"><span className="desktop-only"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move&nbsp;&nbsp; <kbd>SHIFT</kbd> sprint&nbsp;&nbsp; <kbd>E</kbd> interact&nbsp;&nbsp;</span> drag to look</div>
