@@ -1,7 +1,7 @@
 "use client";
 
 import { WebSocketRealtimeTransport, type TransportStatus } from "@afterlight/networking";
-import type { CharacterAppearance, PlayerSnapshot, RealtimeMessage, SessionDescriptor } from "@afterlight/shared";
+import type { CharacterAppearance, HomeState, PlayerSnapshot, RealtimeMessage, SessionDescriptor } from "@afterlight/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type MultiplayerConnectionStatus = TransportStatus | "error";
@@ -11,8 +11,10 @@ export interface MultiplayerSessionState {
   session: SessionDescriptor | null;
   selfId: string | null;
   players: PlayerSnapshot[];
+  home: HomeState | null;
   error: string;
   updatePlayer: (update: Pick<PlayerSnapshot, "position" | "rotation" | "movement">) => void;
+  updateHome: (state: HomeState) => void;
   createSession: (displayName: string) => void;
   joinSession: (inviteCode: string, displayName: string) => void;
   leaveSession: () => void;
@@ -36,6 +38,7 @@ export function useMultiplayerSession(appearance: CharacterAppearance): Multipla
   const [session, setSession] = useState<SessionDescriptor | null>(null);
   const [selfId, setSelfId] = useState<string | null>(null);
   const [playersById, setPlayersById] = useState<Record<string, PlayerSnapshot>>({});
+  const [home, setHome] = useState<HomeState | null>(null);
   const [error, setError] = useState("");
   const statusRef = useRef(status);
   const appearanceRef = useRef(appearance);
@@ -60,6 +63,7 @@ export function useMultiplayerSession(appearance: CharacterAppearance): Multipla
         setSession(message.session);
         setSelfId(message.self.id);
         replacePlayers(message.players);
+        setHome(message.home ?? null);
         sessionIntent.current = {
           inviteCode: message.session.inviteCode,
           displayName: message.self.displayName,
@@ -79,6 +83,10 @@ export function useMultiplayerSession(appearance: CharacterAppearance): Multipla
           delete next[message.playerId];
           return next;
         });
+        return;
+      }
+      if (message.type === "home.updated") {
+        setHome(message.state);
         return;
       }
       if (message.type === "session.error") {
@@ -152,6 +160,7 @@ export function useMultiplayerSession(appearance: CharacterAppearance): Multipla
     setSession(null);
     setSelfId(null);
     setPlayersById({});
+    setHome(null);
     setError("");
     void transport.disconnect();
   }, [session, transport]);
@@ -160,13 +169,19 @@ export function useMultiplayerSession(appearance: CharacterAppearance): Multipla
     if (session && statusRef.current === "connected") transport.send({ type: "player.update", player: update });
   }, [session, transport]);
 
+  const updateHome = useCallback((state: HomeState) => {
+    if (session && statusRef.current === "connected") transport.send({ type: "home.update", state });
+  }, [session, transport]);
+
   return {
     status,
     session,
     selfId,
     players: Object.values(playersById),
+    home,
     error,
     updatePlayer,
+    updateHome,
     createSession,
     joinSession,
     leaveSession

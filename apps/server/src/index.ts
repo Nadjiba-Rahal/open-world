@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage } from "node:http";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Socket } from "node:net";
-import { createDefaultAppearance, type CharacterAppearance, type MovementState, type PlayerId, type PlayerSnapshot, type RealtimeMessage, type SessionDescriptor } from "@afterlight/shared";
+import { createDefaultAppearance, type CharacterAppearance, type HomeState, type MovementState, type PlayerId, type PlayerSnapshot, type RealtimeMessage, type SessionDescriptor } from "@afterlight/shared";
 import { acceptWebSocket, type WebSocketPeer } from "./websocket.js";
 
 const port = Number(process.env.PORT ?? 3001);
@@ -24,6 +24,7 @@ interface PlayerRecord {
 interface Session {
   descriptor: SessionDescriptor;
   players: Map<PlayerId, PlayerRecord>;
+  home?: HomeState;
 }
 
 function playerId(): PlayerId {
@@ -157,7 +158,7 @@ function handleMessage(peer: WebSocketPeer, raw: string): void {
     const session: Session = { descriptor, players: new Map() };
     sessions.set(descriptor.sessionId, session);
     const player = createPlayer(session, peer, message.displayName, message.appearance);
-    send(peer, { type: "session.created", requestId: message.requestId, session: descriptor, self: snapshot(player), players: [...session.players.values()].map(snapshot), reconnectToken: player.reconnectToken });
+    send(peer, { type: "session.created", requestId: message.requestId, session: descriptor, self: snapshot(player), players: [...session.players.values()].map(snapshot), home: session.home, reconnectToken: player.reconnectToken });
     return;
   }
 
@@ -174,7 +175,7 @@ function handleMessage(peer: WebSocketPeer, raw: string): void {
     const existing = message.reconnectToken ? [...session.players.values()].find((candidate) => candidate.reconnectToken === message.reconnectToken) : undefined;
     if (existing) {
       reconnectPlayer(existing, peer, message.displayName, message.appearance);
-      send(peer, { type: "session.joined", requestId: message.requestId, session: session.descriptor, self: snapshot(existing), players: [...session.players.values()].map(snapshot), reconnectToken: existing.reconnectToken });
+      send(peer, { type: "session.joined", requestId: message.requestId, session: session.descriptor, self: snapshot(existing), players: [...session.players.values()].map(snapshot), home: session.home, reconnectToken: existing.reconnectToken });
       broadcast(session, { type: "player.updated", player: snapshot(existing) }, peer);
       return;
     }
@@ -183,7 +184,7 @@ function handleMessage(peer: WebSocketPeer, raw: string): void {
       return;
     }
     const player = createPlayer(session, peer, message.displayName, message.appearance);
-    send(peer, { type: "session.joined", requestId: message.requestId, session: session.descriptor, self: snapshot(player), players: [...session.players.values()].map(snapshot), reconnectToken: player.reconnectToken });
+    send(peer, { type: "session.joined", requestId: message.requestId, session: session.descriptor, self: snapshot(player), players: [...session.players.values()].map(snapshot), home: session.home, reconnectToken: player.reconnectToken });
     broadcast(session, { type: "player.joined", player: snapshot(player) }, peer);
     return;
   }
@@ -219,6 +220,33 @@ function handleMessage(peer: WebSocketPeer, raw: string): void {
       connected: true
     };
     broadcast(player.session, { type: "player.updated", player: snapshot(player) });
+    return;
+  }
+  if (message.type === "home.update") {
+    const ownerId = player.session.home?.ownerId ?? player.id;
+    const role = message.state.permissions[player.id] ?? player.session.home?.permissions[player.id] ?? "visitor";
+    if (message.state.ownerId !== ownerId || !["owner", "co-owner", "builder", "decorator"].includes(role)) {
+      error(peer, undefined, "not_member", "You do not have permission to edit this home.");
+      return;
+    }
+    const objects = message.state.objects.slice(0, 100).map((object) => ({
+      id: String(object.id).slice(0, 60),
+      furnitureId: String(object.furnitureId).slice(0, 60),
+      position: {
+        x: Math.max(-20, Math.min(20, finite(object.position?.x, 0))),
+        y: Math.max(0, Math.min(8, finite(object.position?.y, 0))),
+        z: Math.max(-20, Math.min(20, finite(object.position?.z, 0)))
+      },
+      rotation: finite(object.rotation, 0)
+    }));
+    const permissions = { ...(player.session.home?.permissions ?? {}), ...message.state.permissions, [ownerId]: "owner" as const };
+    const home = { ownerId, objects, permissions, revision: (player.session.home?.revision ?? 0) + 1 };
+    player.session.home = home;
+    broadcast(player.session, { type: "home.updated", ownerId: player.id, state: home });
+    return;
+  }
+  if (message.type === "player.emote") {
+    if (message.emote.length <= 24) broadcast(player.session, { type: "player.emote", playerId: player.id, emote: message.emote }, peer);
   }
 }
 

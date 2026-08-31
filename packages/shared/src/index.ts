@@ -5,6 +5,32 @@ export type WorldId = "lumenfall" | "moonwood" | "player-home" | "mystery";
 export type PlayerId = string & { readonly __brand: "PlayerId" };
 export interface CharacterAppearance { skinTone: string; bodyType: string; face: string; eyes: string; hair: string; hairColor: string; outfit: string; accessories: string[]; }
 export type MovementState = "idle" | "walking" | "sprinting";
+export type ItemCategory = "resource" | "food" | "tool" | "furniture" | "decoration" | "collectible";
+export type ItemRarity = "common" | "uncommon" | "rare" | "epic";
+export interface ItemDefinition { id: string; name: string; category: ItemCategory; stackSize: number; icon: string; rarity: ItemRarity; }
+export interface InventorySlot { itemId: string; quantity: number; }
+export type FurnitureCategory = "bed" | "seating" | "surface" | "lighting" | "plant" | "storage" | "kitchen" | "shelving" | "rug" | "work" | "outdoor" | "fireplace" | "decoration" | "wall";
+export interface FurnitureDefinition { id: string; name: string; category: FurnitureCategory; color: string; footprint: [number, number]; }
+export type HomeRole = "owner" | "co-owner" | "builder" | "decorator" | "visitor";
+export interface HomeObject { id: string; furnitureId: string; position: { x: number; y: number; z: number }; rotation: number; }
+export interface HomeState { ownerId: PlayerId; objects: HomeObject[]; permissions: Record<string, HomeRole>; revision: number; }
+export type RecipeCategory = "tools" | "furniture" | "decorations" | "food" | "potions";
+export type CraftingStation = "hands" | "workbench" | "kitchen";
+export interface RecipeInput { itemId: string; quantity: number; }
+export interface RecipeDefinition { id: string; name: string; category: RecipeCategory; inputs: RecipeInput[]; outputs: RecipeInput[]; station: CraftingStation; durationSeconds: number; }
+export type QuestType = "talk" | "reach" | "collect" | "craft" | "discover" | "build" | "find";
+export type QuestState = "available" | "active" | "completed" | "locked";
+export interface QuestDefinition { id: string; name: string; description: string; type: QuestType; targetId: string; targetQuantity: number; rewardXp: number; rewardItems?: RecipeInput[]; prerequisiteIds?: string[]; }
+export interface QuestProgress { questId: string; state: QuestState; progress: number; }
+export type NpcState = "idle" | "walk" | "work" | "eat" | "socialize" | "sleep";
+export interface NpcDefinition { id: string; name: string; location: WorldId; position: { x: number; y: number; z: number }; dialogue: string[]; quests: string[]; schedule: Array<{ start: number; end: number; state: NpcState }>; }
+export type DiscoveryType = "location" | "resource" | "creature" | "recipe" | "portal" | "secret";
+export interface DiscoveryDefinition { id: string; name: string; type: DiscoveryType; description: string; }
+export type PortalState = "unlocked" | "quest-locked" | "discovery-locked" | "mysterious";
+export interface PortalDefinition { id: string; name: string; destination: WorldId; position: { x: number; y: number; z: number }; state: PortalState; requirement?: string; }
+export interface ProgressionState { experience: number; level: number; achievements: string[]; discoveredRecipes: string[]; discoveredLocations: string[]; collectibles: string[]; }
+export type WeatherKind = "clear" | "cloudy" | "rain" | "snow";
+export interface WorldAtmosphere { dayProgress: number; weather: WeatherKind; }
 export interface PlayerSnapshot {
   id: PlayerId;
   displayName: string;
@@ -21,11 +47,14 @@ export type RealtimeMessage =
   | { type: "session.join"; requestId: string; inviteCode: string; displayName: string; appearance: CharacterAppearance; reconnectToken?: string }
   | { type: "session.leave"; requestId: string }
   | { type: "player.update"; player: Pick<PlayerSnapshot, "position" | "rotation" | "movement"> }
-  | { type: "session.created"; requestId: string; session: SessionDescriptor; self: PlayerSnapshot; players: PlayerSnapshot[]; reconnectToken: string }
-  | { type: "session.joined"; requestId: string; session: SessionDescriptor; self: PlayerSnapshot; players: PlayerSnapshot[]; reconnectToken: string }
+  | { type: "session.created"; requestId: string; session: SessionDescriptor; self: PlayerSnapshot; players: PlayerSnapshot[]; home?: HomeState; reconnectToken: string }
+  | { type: "session.joined"; requestId: string; session: SessionDescriptor; self: PlayerSnapshot; players: PlayerSnapshot[]; home?: HomeState; reconnectToken: string }
   | { type: "player.joined"; player: PlayerSnapshot }
   | { type: "player.updated"; player: PlayerSnapshot }
+  | { type: "player.emote"; playerId: PlayerId; emote: string }
   | { type: "player.left"; playerId: PlayerId; reason: "left" | "disconnected" }
+  | { type: "home.updated"; ownerId: PlayerId; state: HomeState }
+  | { type: "home.update"; state: HomeState }
   | { type: "session.error"; requestId?: string; code: "invalid" | "not_found" | "full" | "not_member"; message: string };
 
 export const CHARACTER_OPTIONS = {
@@ -117,3 +146,74 @@ export function createDefaultAppearance(): CharacterAppearance {
     accessories: ["leaf-pin"]
   };
 }
+
+export const ITEM_CATALOG: ItemDefinition[] = [
+  { id: "wood", name: "Wood", category: "resource", stackSize: 99, icon: "枝", rarity: "common" },
+  { id: "stone", name: "Stone", category: "resource", stackSize: 99, icon: "◆", rarity: "common" },
+  { id: "ore", name: "Ore", category: "resource", stackSize: 50, icon: "◈", rarity: "uncommon" },
+  { id: "flowers", name: "Flowers", category: "resource", stackSize: 99, icon: "✿", rarity: "common" },
+  { id: "herbs", name: "Herbs", category: "resource", stackSize: 99, icon: "❧", rarity: "common" },
+  { id: "fruit", name: "Forest fruit", category: "resource", stackSize: 50, icon: "●", rarity: "common" },
+  { id: "fish", name: "River fish", category: "resource", stackSize: 20, icon: "≈", rarity: "uncommon" },
+  { id: "crystals", name: "Moon crystals", category: "resource", stackSize: 20, icon: "✦", rarity: "rare" },
+  { id: "fruit-tea", name: "Fruit tea", category: "food", stackSize: 20, icon: "☕", rarity: "common" },
+  { id: "herb-soup", name: "Herb soup", category: "food", stackSize: 20, icon: "◌", rarity: "common" },
+  { id: "forest-stew", name: "Forest stew", category: "food", stackSize: 20, icon: "♨", rarity: "uncommon" },
+  { id: "honey-pastry", name: "Honey pastry", category: "food", stackSize: 20, icon: "⌁", rarity: "uncommon" },
+  { id: "wooden-hammer", name: "Wooden hammer", category: "tool", stackSize: 1, icon: "⚒", rarity: "common" }
+];
+
+export const FURNITURE_CATALOG: FurnitureDefinition[] = [
+  { id: "bed", name: "Moss bed", category: "bed", color: "#637b70", footprint: [2.2, 1.3] },
+  { id: "chair", name: "Willow chair", category: "seating", color: "#9d7556", footprint: [0.8, 0.8] },
+  { id: "table", name: "Round table", category: "surface", color: "#89664d", footprint: [1.6, 1.6] },
+  { id: "sofa", name: "Fireside sofa", category: "seating", color: "#66718a", footprint: [2.4, 0.9] },
+  { id: "lamp", name: "Lantern lamp", category: "lighting", color: "#d1b56b", footprint: [0.5, 0.5] },
+  { id: "plant", name: "Fern plant", category: "plant", color: "#6d8f68", footprint: [0.7, 0.7] },
+  { id: "storage", name: "Cedar storage", category: "storage", color: "#73533f", footprint: [1.3, 0.8] },
+  { id: "kitchen", name: "Clay kitchen", category: "kitchen", color: "#9b6651", footprint: [2.4, 0.8] },
+  { id: "bookshelf", name: "Moon bookshelf", category: "shelving", color: "#536477", footprint: [1.4, 0.5] },
+  { id: "rug", name: "River rug", category: "rug", color: "#477b7a", footprint: [2.3, 1.5] },
+  { id: "desk", name: "Cartographer desk", category: "work", color: "#596355", footprint: [1.5, 0.8] },
+  { id: "bench", name: "Garden bench", category: "outdoor", color: "#86644d", footprint: [1.8, 0.7] },
+  { id: "fireplace", name: "Stone fireplace", category: "fireplace", color: "#7e6b65", footprint: [1.8, 0.7] },
+  { id: "decorations", name: "Memory shelf", category: "decoration", color: "#a28a66", footprint: [0.8, 0.5] },
+  { id: "wall-decoration", name: "Pressed leaves", category: "wall", color: "#8aab6b", footprint: [0.8, 0.15] }
+];
+
+export const RECIPE_CATALOG: RecipeDefinition[] = [
+  { id: "fruit-tea", name: "Fruit tea", category: "food", inputs: [{ itemId: "fruit", quantity: 2 }, { itemId: "flowers", quantity: 1 }], outputs: [{ itemId: "fruit-tea", quantity: 1 }], station: "kitchen", durationSeconds: 3 },
+  { id: "herb-soup", name: "Herb soup", category: "food", inputs: [{ itemId: "herbs", quantity: 2 }, { itemId: "stone", quantity: 1 }], outputs: [{ itemId: "herb-soup", quantity: 1 }], station: "kitchen", durationSeconds: 4 },
+  { id: "forest-stew", name: "Forest stew", category: "food", inputs: [{ itemId: "fruit", quantity: 1 }, { itemId: "herbs", quantity: 2 }, { itemId: "fish", quantity: 1 }], outputs: [{ itemId: "forest-stew", quantity: 1 }], station: "kitchen", durationSeconds: 6 },
+  { id: "honey-pastry", name: "Honey pastry", category: "food", inputs: [{ itemId: "flowers", quantity: 2 }, { itemId: "fruit", quantity: 1 }], outputs: [{ itemId: "honey-pastry", quantity: 1 }], station: "kitchen", durationSeconds: 5 },
+  { id: "wooden-hammer", name: "Wooden hammer", category: "tools", inputs: [{ itemId: "wood", quantity: 5 }, { itemId: "stone", quantity: 2 }], outputs: [{ itemId: "wooden-hammer", quantity: 1 }], station: "workbench", durationSeconds: 3 }
+];
+
+export const QUEST_CATALOG: QuestDefinition[] = [
+  { id: "first-gathering", name: "A handful of beginnings", description: "Gather five pieces of wood for Mira.", type: "collect", targetId: "wood", targetQuantity: 5, rewardXp: 30, rewardItems: [{ itemId: "flowers", quantity: 2 }] },
+  { id: "lantern-keeper", name: "The lantern keeper", description: "Find the lantern stone near the town path.", type: "discover", targetId: "lantern-stone", targetQuantity: 1, rewardXp: 60, rewardItems: [{ itemId: "crystals", quantity: 1 }] },
+  { id: "warm-meal", name: "Something warm", description: "Cook a bowl of herb soup.", type: "craft", targetId: "herb-soup", targetQuantity: 1, rewardXp: 75, rewardItems: [{ itemId: "fruit", quantity: 2 }] },
+  { id: "moonwood-footfall", name: "Under older branches", description: "Discover the Moonwood trail.", type: "discover", targetId: "moonwood", targetQuantity: 1, rewardXp: 100 }
+];
+
+export const DISCOVERY_CATALOG: DiscoveryDefinition[] = [
+  { id: "lumenfall", name: "Lumenfall", type: "location", description: "A lantern-lit gathering place." },
+  { id: "moonwood", name: "Moonwood trail", type: "location", description: "A river path beneath ancient trees." },
+  { id: "lantern-stone", name: "Lantern stone", type: "secret", description: "Something answers from the forest." },
+  { id: "mysterious-portal", name: "The locked beyond", type: "portal", description: "A door to a world not yet named." },
+  { id: "moon-crystals", name: "Moon crystals", type: "resource", description: "Pale crystals found near the ruins." }
+];
+
+export const NPC_CATALOG: NpcDefinition[] = [
+  { id: "mira", name: "Mira", location: "lumenfall", position: { x: -3, y: 0, z: -1 }, dialogue: ["The town remembers everyone who passes through.", "Bring me a few pieces of wood and I will show you the old trail."], quests: ["first-gathering"], schedule: [{ start: 0, end: 0.7, state: "work" }, { start: 0.7, end: 0.85, state: "socialize" }, { start: 0.85, end: 1, state: "sleep" }] },
+  { id: "oren", name: "Oren", location: "lumenfall", position: { x: 3, y: 0, z: -3 }, dialogue: ["The Moonwood river changes its mind after sunset.", "One day, someone will open the quiet portal."], quests: ["lantern-keeper"], schedule: [{ start: 0, end: 0.45, state: "work" }, { start: 0.45, end: 0.75, state: "eat" }, { start: 0.75, end: 1, state: "idle" }] }
+];
+
+export const PORTAL_CATALOG: PortalDefinition[] = [
+  { id: "moonwood-gate", name: "Moonwood trail", destination: "moonwood", position: [-13, 0, -10], state: "unlocked" },
+  { id: "mystery-gate", name: "The quiet portal", destination: "mystery", position: [13, 0, -10], state: "mysterious", requirement: "A discovery still has no name." }
+];
+
+export function createEmptyInventory(): InventorySlot[] { return []; }
+export function createDefaultHome(ownerId: PlayerId): HomeState { return { ownerId, objects: [], permissions: { [ownerId]: "owner" }, revision: 0 }; }
+export function createDefaultProgression(): ProgressionState { return { experience: 0, level: 1, achievements: [], discoveredRecipes: [], discoveredLocations: [], collectibles: [] }; }
