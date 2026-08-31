@@ -1,0 +1,13 @@
+{
+  "name": "afterlight",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A stylized multiplayer 3D fantasy world.",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "pnpm --filter @afterlight/web build && pnpm --filter @afterlight/server build",
+    "dev:web": "pnpm --filter @afterlight/web dev",
+    "dev:server": "pnpm --filter @afterlight/server dev",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
