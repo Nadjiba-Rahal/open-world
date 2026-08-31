@@ -72,6 +72,32 @@ export function grantExperience(state: ProgressionState, amount: number): Progre
   return { ...state, experience, level: Math.max(1, Math.floor(experience / 100) + 1) };
 }
 
+export function unlockAchievement(state: ProgressionState, achievementId: string): ProgressionState {
+  if (state.achievements.includes(achievementId)) return state;
+  return grantExperience({ ...state, achievements: [...state.achievements, achievementId] }, 25);
+}
+
+export function distance3D(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  const dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+export function formatTimeOfDay(dayProgress: number): { timeString: string; isDay: boolean; phase: "dawn" | "day" | "dusk" | "night" } {
+  const hours = Math.floor(dayProgress * 24);
+  const minutes = Math.floor((dayProgress * 24 - hours) * 60);
+  const formattedHours = hours.toString().padStart(2, "0");
+  const formattedMinutes = minutes.toString().padStart(2, "0");
+  let phase: "dawn" | "day" | "dusk" | "night" = "day";
+  if (hours >= 5 && hours < 8) phase = "dawn";
+  else if (hours >= 8 && hours < 18) phase = "day";
+  else if (hours >= 18 && hours < 21) phase = "dusk";
+  else phase = "night";
+  const isDay = phase === "dawn" || phase === "day";
+  return { timeString: `${formattedHours}:${formattedMinutes}`, isDay, phase };
+}
+
 export function canBuild(role: string): boolean { return role === "owner" || role === "co-owner" || role === "builder"; }
 export function canDecorate(role: string): boolean { return canBuild(role) || role === "decorator"; }
 export function playerKey(playerId: PlayerId): string { return playerId; }
@@ -80,3 +106,5 @@ export function npcStateAt(npc: NpcDefinition, dayProgress: number): NpcState {
   const normalized = ((dayProgress % 1) + 1) % 1;
   return npc.schedule.find((entry) => normalized >= entry.start && normalized < entry.end)?.state ?? "idle";
 }
+
+

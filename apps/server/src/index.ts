@@ -1,12 +1,14 @@
 import { createServer, type IncomingMessage } from "node:http";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Socket } from "node:net";
-import { EMOTE_CATALOG, createDefaultAppearance, type CharacterAppearance, type HomeState, type MovementState, type PlayerId, type PlayerSnapshot, type RealtimeMessage, type SessionDescriptor } from "@afterlight/shared";
+import { EMOTE_CATALOG, createDefaultAppearance, type CharacterAppearance, type HomeState, type MovementState, type PlayerId, type PlayerProfile, type PlayerSnapshot, type RealtimeMessage, type SessionDescriptor } from "@afterlight/shared";
+import { MemoryPersistenceAdapter, PlayerProfileRepository } from "@afterlight/database";
 import { acceptWebSocket, type WebSocketPeer } from "./websocket.js";
 
 const port = Number(process.env.PORT ?? 3001);
 const maxPlayers = 8;
 const worldId = "lumenfall" as const;
+const persistence = new PlayerProfileRepository(new MemoryPersistenceAdapter());
 const sessions = new Map<string, Session>();
 const playersByConnection = new Map<WebSocketPeer, PlayerRecord>();
 
@@ -244,7 +246,29 @@ function handleMessage(peer: WebSocketPeer, raw: string): void {
       : { ...(player.session.home?.permissions ?? {}), [ownerId]: "owner" as const };
     const home = { ownerId, objects, permissions, revision: (player.session.home?.revision ?? 0) + 1 };
     player.session.home = home;
+    void persistence.saveHome(home);
     broadcast(player.session, { type: "home.updated", ownerId: player.id, state: home });
+    return;
+  }
+  if (message.type === "profile.sync") {
+    if (message.profile) {
+      void persistence.loadProfile(player.id, player.displayName).then((profile) => {
+        const merged: PlayerProfile = {
+          ...profile,
+          ...message.profile,
+          id: player.id,
+          displayName: player.displayName,
+          appearance: player.appearance,
+          updatedAt: Date.now()
+        };
+        void persistence.saveProfile(merged);
+        send(peer, { type: "profile.updated", profile: merged });
+      });
+    }
+    return;
+  }
+  if (message.type === "world.interact") {
+    broadcast(player.session, { type: "world.event", eventType: message.interactionType, targetId: message.targetId, playerId: player.id }, peer);
     return;
   }
   if (message.type === "player.emote") {

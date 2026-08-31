@@ -1,10 +1,17 @@
 "use client";
 
 import { WebSocketRealtimeTransport, type TransportStatus } from "@afterlight/networking";
-import type { CharacterAppearance, EmoteId, HomeState, PlayerSnapshot, RealtimeMessage, SessionDescriptor } from "@afterlight/shared";
+import type { CharacterAppearance, EmoteId, HomeState, PlayerProfile, PlayerSnapshot, RealtimeMessage, SessionDescriptor } from "@afterlight/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type MultiplayerConnectionStatus = TransportStatus | "error";
+
+export interface WorldEventNotice {
+  eventType: string;
+  targetId: string;
+  playerId: string;
+  timestamp: number;
+}
 
 export interface MultiplayerSessionState {
   status: MultiplayerConnectionStatus;
@@ -13,9 +20,12 @@ export interface MultiplayerSessionState {
   players: PlayerSnapshot[];
   home: HomeState | null;
   emotes: Record<string, EmoteId>;
+  latestWorldEvent: WorldEventNotice | null;
   error: string;
   updatePlayer: (update: Pick<PlayerSnapshot, "position" | "rotation" | "movement">) => void;
   updateHome: (state: HomeState) => void;
+  syncProfile: (profile: Partial<PlayerProfile>) => void;
+  sendWorldInteract: (interactionType: string, targetId: string) => void;
   sendEmote: (emote: EmoteId) => void;
   createSession: (displayName: string) => void;
   joinSession: (inviteCode: string, displayName: string) => void;
@@ -42,6 +52,7 @@ export function useMultiplayerSession(appearance: CharacterAppearance): Multipla
   const [playersById, setPlayersById] = useState<Record<string, PlayerSnapshot>>({});
   const [home, setHome] = useState<HomeState | null>(null);
   const [emotes, setEmotes] = useState<Record<string, EmoteId>>({});
+  const [latestWorldEvent, setLatestWorldEvent] = useState<WorldEventNotice | null>(null);
   const [error, setError] = useState("");
   const statusRef = useRef(status);
   const appearanceRef = useRef(appearance);
@@ -94,6 +105,15 @@ export function useMultiplayerSession(appearance: CharacterAppearance): Multipla
       }
       if (message.type === "player.emote") {
         setEmotes((current) => ({ ...current, [message.playerId]: message.emote as EmoteId }));
+        return;
+      }
+      if (message.type === "world.event") {
+        setLatestWorldEvent({
+          eventType: message.eventType,
+          targetId: message.targetId,
+          playerId: message.playerId,
+          timestamp: Date.now()
+        });
         return;
       }
       if (message.type === "session.error") {
@@ -169,6 +189,7 @@ export function useMultiplayerSession(appearance: CharacterAppearance): Multipla
     setPlayersById({});
     setHome(null);
     setEmotes({});
+    setLatestWorldEvent(null);
     setError("");
     void transport.disconnect();
   }, [session, transport]);
@@ -179,6 +200,14 @@ export function useMultiplayerSession(appearance: CharacterAppearance): Multipla
 
   const updateHome = useCallback((state: HomeState) => {
     if (session && statusRef.current === "connected") transport.send({ type: "home.update", state });
+  }, [session, transport]);
+
+  const syncProfile = useCallback((profile: Partial<PlayerProfile>) => {
+    if (session && statusRef.current === "connected") transport.send({ type: "profile.sync", profile });
+  }, [session, transport]);
+
+  const sendWorldInteract = useCallback((interactionType: string, targetId: string) => {
+    if (session && statusRef.current === "connected") transport.send({ type: "world.interact", interactionType, targetId });
   }, [session, transport]);
 
   const sendEmote = useCallback((emote: EmoteId) => {
@@ -193,12 +222,15 @@ export function useMultiplayerSession(appearance: CharacterAppearance): Multipla
     players: Object.values(playersById),
     home,
     emotes,
+    latestWorldEvent,
     error,
     updatePlayer,
     updateHome,
+    syncProfile,
+    sendWorldInteract,
     sendEmote,
     createSession,
     joinSession,
     leaveSession
   };
-}
+}

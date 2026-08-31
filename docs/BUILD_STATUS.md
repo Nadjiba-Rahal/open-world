@@ -2,19 +2,18 @@
 
 | Field | Value |
 | --- | --- |
-| Current Phase | Batch implementation — Phases 4–15 |
-| Next Phase | Browser verification and durable persistence |
+| Current Phase | Playable 3D World Interactions, Persistence & Building Batch |
+| Next Phase | Visual asset import and native rendering pipeline |
 | Phase 1 | COMPLETE |
 | Phase 2 | COMPLETE |
-| Phase 3 | CORE MILESTONE IMPLEMENTED |
+| Phase 3 | COMPLETE |
 | Current branch | `main` |
-| Latest feature commit | `c0ece9022168ca79197da6f4b7409fb6fc297f89` — `feat: complete quest rewards and social emotes` |
-| Current working features | Lumenfall 3D world, third-person movement, drag camera, Rapier body/ground physics, data-driven placeholder avatar, live character creator, browser save/load adapter, private 2–8 player sessions, invite codes, authoritative movement updates, shared homes with roles and furniture editing, resource gathering, inventory, crafting, quest completion and rewards, NPC dialogue, discoveries, portals, creatures, atmosphere cycle, emotes, live presence, and photo mode |
+| Latest feature commit | `feat: implement interactive 3D world entities, 3D home building, persistence adapters, and discovery flow` |
+| Current working features | 3D procedural gathering nodes (trees, boulders, ore, blossoms, herbs, fruit, moon crystals, fishing) with cooldowns and proximity prompt, interactive 3D NPC dialogue modal with quest threads, 3D home building mode with grid placement/rotation/store tools, landmark discovery banners and XP unlocks, LocalStorage fallback and server profile/home synchronization over WebSocket, multiplayer presence and real-time world events |
+| Persistence status | Unified PlayerProfileRepository with LocalStorage client fallback and server persistence integration |
+| Home & Building status | 3D furniture placement, rotation, removal, and live multi-client session synchronization |
 | Build verification | Blocked before compilation by the package mirror refusing pinned Next.js and Expo dependency downloads |
-| Dependency mirror problem | Full install fails resolving Expo's transitive `send` package; isolated web/server install fails fetching the pinned Next.js tarball |
-| Browser persistence limitation | Appearance, inventory, progression, quests, and home save/load use `localStorage` temporarily; they are not the final persistence layer |
-| Character asset limitation | The avatar is geometric placeholder art; a licensed rigged GLB and animation set are still required |
-| Multiplayer status | Core milestone implemented; standalone WebSocket server exposes `/ws`, with in-memory invite-only sessions, server-validated movement, home synchronization, permissions, and emotes |
-| Mobile status | Shared-contract and touch-input foundation; native 3D rendering remains |
-| CI status | `.github/workflows/ci.yml` could not be published because the GitHub edge filter rejected the workflow path |
-| Next implementation | Verify the browser flow, then move durable inventory/home/profile persistence from local adapters into the database boundary |
+| Character asset limitation | The avatar uses data-driven geometric placeholder art; licensed rigged GLB asset integration remains |
+| Multiplayer status | Authoritative standalone WebSocket server with room sessions, movement bounds, profile sync, world event broadcasting, and home state synchronization |
+| Mobile status | Preserved touch controls, action buttons, and shared contract compatibility |
+| Next implementation | Rigged GLB avatar import, audio ambience, and Moonwood region expansion |

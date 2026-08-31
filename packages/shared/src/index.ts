@@ -46,6 +46,30 @@ export interface PlayerSnapshot {
   connected: boolean;
 }
 export interface SessionDescriptor { sessionId: string; inviteCode: string; worldId: WorldId; maxPlayers: number; inviteOnly: true; }
+export interface PlayerProfile {
+  id: PlayerId;
+  displayName: string;
+  appearance: CharacterAppearance;
+  inventory: InventorySlot[];
+  progression: ProgressionState;
+  quests: QuestProgress[];
+  home: HomeState;
+  updatedAt: number;
+}
+
+export type ResourceKind = "tree" | "boulder" | "plants" | "herbs" | "fruit" | "crystals" | "fishing";
+
+export interface ResourceNodeDefinition {
+  id: string;
+  itemId: string;
+  name: string;
+  kind: ResourceKind;
+  position: [number, number, number];
+  color: string;
+  respawnTimeSeconds: number;
+  yieldQuantity: number;
+}
+
 export type RealtimeMessage =
   | { type: "session.create"; requestId: string; displayName: string; appearance: CharacterAppearance }
   | { type: "session.join"; requestId: string; inviteCode: string; displayName: string; appearance: CharacterAppearance; reconnectToken?: string }
@@ -59,6 +83,10 @@ export type RealtimeMessage =
   | { type: "player.left"; playerId: PlayerId; reason: "left" | "disconnected" }
   | { type: "home.updated"; ownerId: PlayerId; state: HomeState }
   | { type: "home.update"; state: HomeState }
+  | { type: "profile.sync"; profile: Partial<PlayerProfile> }
+  | { type: "profile.updated"; profile: Partial<PlayerProfile> }
+  | { type: "world.interact"; interactionType: string; targetId: string; position?: { x: number; y: number; z: number } }
+  | { type: "world.event"; eventType: string; targetId: string; playerId: PlayerId }
   | { type: "session.error"; requestId?: string; code: "invalid" | "not_found" | "full" | "not_member"; message: string };
 
 export const CHARACTER_OPTIONS = {
@@ -193,29 +221,70 @@ export const RECIPE_CATALOG: RecipeDefinition[] = [
   { id: "wooden-hammer", name: "Wooden hammer", category: "tools", inputs: [{ itemId: "wood", quantity: 5 }, { itemId: "stone", quantity: 2 }], outputs: [{ itemId: "wooden-hammer", quantity: 1 }], station: "workbench", durationSeconds: 3 }
 ];
 
+export const RESOURCE_NODES: ResourceNodeDefinition[] = [
+  { id: "tree-north", itemId: "wood", name: "Ancient Willow Tree", kind: "tree", position: [-11, 0, -8], color: "#79543c", respawnTimeSeconds: 20, yieldQuantity: 2 },
+  { id: "tree-west", itemId: "wood", name: "Silver Birch", kind: "tree", position: [-14, 0, 4], color: "#79543c", respawnTimeSeconds: 20, yieldQuantity: 2 },
+  { id: "tree-south", itemId: "wood", name: "Moss Oak", kind: "tree", position: [-10, 0, 12], color: "#79543c", respawnTimeSeconds: 20, yieldQuantity: 2 },
+  { id: "tree-east", itemId: "wood", name: "River Pine", kind: "tree", position: [14, 0, 7], color: "#79543c", respawnTimeSeconds: 20, yieldQuantity: 2 },
+  { id: "boulder-hearth", itemId: "stone", name: "Granite Boulder", kind: "boulder", position: [-10, 0, -2], color: "#8b9690", respawnTimeSeconds: 25, yieldQuantity: 2 },
+  { id: "boulder-grove", itemId: "ore", name: "Iron Vein", kind: "boulder", position: [12, 0, -5], color: "#a89078", respawnTimeSeconds: 30, yieldQuantity: 1 },
+  { id: "blossom-clearing", itemId: "flowers", name: "Sun Blossoms", kind: "plants", position: [7, 0, 5], color: "#d08c91", respawnTimeSeconds: 15, yieldQuantity: 2 },
+  { id: "herb-patch", itemId: "herbs", name: "Forest Herbs", kind: "herbs", position: [9, 0, -1], color: "#7fa26b", respawnTimeSeconds: 15, yieldQuantity: 2 },
+  { id: "berry-bush", itemId: "fruit", name: "Wildberry Bush", kind: "fruit", position: [-5, 0, -9], color: "#bd6d5e", respawnTimeSeconds: 15, yieldQuantity: 2 },
+  { id: "crystal-shrine", itemId: "crystals", name: "Moon Crystal Cluster", kind: "crystals", position: [11, 0, -8], color: "#9fc5e8", respawnTimeSeconds: 40, yieldQuantity: 1 },
+  { id: "river-pier-spot", itemId: "fish", name: "Riverbank Shallows", kind: "fishing", position: [-8, 0, 1], color: "#5d9b9b", respawnTimeSeconds: 25, yieldQuantity: 1 }
+];
+
 export const QUEST_CATALOG: QuestDefinition[] = [
-  { id: "first-gathering", name: "A handful of beginnings", description: "Gather five pieces of wood for Mira.", type: "collect", targetId: "wood", targetQuantity: 5, rewardXp: 30, rewardItems: [{ itemId: "flowers", quantity: 2 }] },
-  { id: "lantern-keeper", name: "The lantern keeper", description: "Find the lantern stone near the town path.", type: "discover", targetId: "lantern-stone", targetQuantity: 1, rewardXp: 60, rewardItems: [{ itemId: "crystals", quantity: 1 }] },
-  { id: "warm-meal", name: "Something warm", description: "Cook a bowl of herb soup.", type: "craft", targetId: "herb-soup", targetQuantity: 1, rewardXp: 75, rewardItems: [{ itemId: "fruit", quantity: 2 }] },
-  { id: "moonwood-footfall", name: "Under older branches", description: "Discover the Moonwood trail.", type: "discover", targetId: "moonwood", targetQuantity: 1, rewardXp: 100 }
+  { id: "first-gathering", name: "A handful of beginnings", description: "Gather five pieces of wood from the Lumenfall trees.", type: "collect", targetId: "wood", targetQuantity: 5, rewardXp: 40, rewardItems: [{ itemId: "flowers", quantity: 3 }] },
+  { id: "lantern-keeper", name: "The lantern keeper", description: "Find the glowing lantern stone monolith in the clearing.", type: "discover", targetId: "lantern-stone", targetQuantity: 1, rewardXp: 60, rewardItems: [{ itemId: "crystals", quantity: 2 }] },
+  { id: "warm-meal", name: "Something warm", description: "Cook a bowl of herb soup at the kitchen station.", type: "craft", targetId: "herb-soup", targetQuantity: 1, rewardXp: 75, rewardItems: [{ itemId: "fruit", quantity: 3 }] },
+  { id: "cozy-hearth", name: "Cozy hearth", description: "Place any piece of furniture on your home plot.", type: "build", targetId: "home-object", targetQuantity: 1, rewardXp: 80, rewardItems: [{ itemId: "wood", quantity: 5 }] },
+  { id: "moonwood-footfall", name: "Under older branches", description: "Discover the Moonwood trail portal.", type: "discover", targetId: "moonwood", targetQuantity: 1, rewardXp: 120, rewardItems: [{ itemId: "crystals", quantity: 3 }] }
 ];
 
 export const DISCOVERY_CATALOG: DiscoveryDefinition[] = [
-  { id: "lumenfall", name: "Lumenfall", type: "location", description: "A lantern-lit gathering place." },
-  { id: "moonwood", name: "Moonwood trail", type: "location", description: "A river path beneath ancient trees." },
-  { id: "lantern-stone", name: "Lantern stone", type: "secret", description: "Something answers from the forest." },
-  { id: "mysterious-portal", name: "The locked beyond", type: "portal", description: "A door to a world not yet named." },
-  { id: "moon-crystals", name: "Moon crystals", type: "resource", description: "Pale crystals found near the ruins." }
+  { id: "lumenfall", name: "Lumenfall Hearth", type: "location", description: "A lantern-lit gathering place where travelers rest." },
+  { id: "moonwood", name: "Moonwood Trail", type: "portal", description: "An ancient river path beneath towering glowing branches." },
+  { id: "lantern-stone", name: "Lantern Stone Monolith", type: "secret", description: "An ancient runic beacon humming with warm resonant energy." },
+  { id: "mysterious-portal", name: "The Quiet Portal", type: "portal", description: "A sealed archway pulsing with enigmatic violet starlight." },
+  { id: "moon-crystals", name: "Moon Crystal Grove", type: "resource", description: "Luminescent crystals found clustered near ancient ruins." },
+  { id: "riverbank-pier", name: "Riverbank Shallows", type: "location", description: "Calm waters frequented by playful river otters." },
+  { id: "homestead-meadow", name: "Homestead Meadow", type: "location", description: "Your private clearing designated for hearth and home building." }
 ];
 
 export const NPC_CATALOG: NpcDefinition[] = [
-  { id: "mira", name: "Mira", location: "lumenfall", position: { x: -3, y: 0, z: -1 }, dialogue: ["The town remembers everyone who passes through.", "Bring me a few pieces of wood and I will show you the old trail."], quests: ["first-gathering"], schedule: [{ start: 0, end: 0.7, state: "work" }, { start: 0.7, end: 0.85, state: "socialize" }, { start: 0.85, end: 1, state: "sleep" }] },
-  { id: "oren", name: "Oren", location: "lumenfall", position: { x: 3, y: 0, z: -3 }, dialogue: ["The Moonwood river changes its mind after sunset.", "One day, someone will open the quiet portal."], quests: ["lantern-keeper"], schedule: [{ start: 0, end: 0.45, state: "work" }, { start: 0.45, end: 0.75, state: "eat" }, { start: 0.75, end: 1, state: "idle" }] }
+  {
+    id: "mira",
+    name: "Mira",
+    location: "lumenfall",
+    position: { x: -3, y: 0, z: -1 },
+    dialogue: [
+      "Welcome to Lumenfall! The forest is alive today.",
+      "Bring me five pieces of wood from the surrounding trees and we'll keep the hearth lit.",
+      "Once the hearth is warm, the ancient lantern stone will guide your path."
+    ],
+    quests: ["first-gathering", "cozy-hearth"],
+    schedule: [{ start: 0, end: 0.7, state: "work" }, { start: 0.7, end: 0.85, state: "socialize" }, { start: 0.85, end: 1, state: "sleep" }]
+  },
+  {
+    id: "oren",
+    name: "Oren",
+    location: "lumenfall",
+    position: { x: 3, y: 0, z: -3 },
+    dialogue: [
+      "The Moonwood river changes its mind after sunset.",
+      "Look for the glowing lantern monolith south of the trail.",
+      "Beyond the trees lies Moonwood... its portal hums with ancient magic."
+    ],
+    quests: ["lantern-keeper", "moonwood-footfall"],
+    schedule: [{ start: 0, end: 0.45, state: "work" }, { start: 0.45, end: 0.75, state: "eat" }, { start: 0.75, end: 1, state: "idle" }]
+  }
 ];
 
 export const PORTAL_CATALOG: PortalDefinition[] = [
-  { id: "moonwood-gate", name: "Moonwood trail", destination: "moonwood", position: [-13, 0, -10], state: "unlocked" },
-  { id: "mystery-gate", name: "The quiet portal", destination: "mystery", position: [13, 0, -10], state: "mysterious", requirement: "A discovery still has no name." }
+  { id: "moonwood-gate", name: "Moonwood trail", destination: "moonwood", position: { x: -13, y: 0, z: -10 }, state: "unlocked" },
+  { id: "mystery-gate", name: "The quiet portal", destination: "mystery", position: { x: 13, y: 0, z: -10 }, state: "mysterious", requirement: "A discovery still has no name." }
 ];
 
 export const EMOTE_CATALOG: EmoteDefinition[] = [
@@ -237,9 +306,24 @@ export const ACHIEVEMENT_CATALOG: AchievementDefinition[] = [
   { id: "first-steps", name: "First steps", description: "Arrive in Lumenfall." },
   { id: "gatherer", name: "A generous handful", description: "Gather your first resource." },
   { id: "maker", name: "Make something", description: "Craft your first recipe." },
-  { id: "wayfinder", name: "Wayfinder", description: "Discover a new location." }
+  { id: "wayfinder", name: "Wayfinder", description: "Discover a new location." },
+  { id: "homestead-builder", name: "Homestead Builder", description: "Place your first piece of furniture." },
+  { id: "woodsman", name: "Woodsman", description: "Chop wood from the ancient trees." }
 ];
 
 export function createEmptyInventory(): InventorySlot[] { return []; }
 export function createDefaultHome(ownerId: PlayerId): HomeState { return { ownerId, objects: [], permissions: { [ownerId]: "owner" }, revision: 0 }; }
-export function createDefaultProgression(): ProgressionState { return { experience: 0, level: 1, achievements: [], discoveredRecipes: [], discoveredLocations: [], collectibles: [] }; }
+export function createDefaultProgression(): ProgressionState { return { experience: 0, level: 1, achievements: ["first-steps"], discoveredRecipes: [], discoveredLocations: ["lumenfall"], collectibles: [] }; }
+export function createDefaultProfile(id: PlayerId, displayName = "Traveler", appearance = createDefaultAppearance()): PlayerProfile {
+  return {
+    id,
+    displayName,
+    appearance,
+    inventory: createEmptyInventory(),
+    progression: createDefaultProgression(),
+    quests: QUEST_CATALOG.map((quest) => ({ questId: quest.id, state: "available" as const, progress: 0 })),
+    home: createDefaultHome(id),
+    updatedAt: Date.now()
+  };
+}
+
