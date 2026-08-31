@@ -2,7 +2,7 @@
 
 Afterlight is a stylized multiplayer 3D fantasy world where friends explore, build, craft, cook, discover hidden worlds, and create their own adventures.
 
-The repository is being built phase by phase. GitHub is the source of truth.
+The repository is being built phase by phase. Phase 2 is complete, Phase 3 has not started, and GitHub is the source of truth.
 
 ## Feature status
 
@@ -14,8 +14,9 @@ The repository is being built phase by phase. GitHub is the source of truth.
 | Server and realtime boundary | Implemented |
 | Mobile foundation | Implemented |
 | Asset documentation system | Implemented |
-| 3D world | In progress |
-| Character customization | In progress |
+| Lumenfall 3D world | Implemented |
+| Data-driven character creator | Implemented |
+| Browser appearance save/load | Implemented (temporary) |
 | Multiplayer rooms | Planned |
 | Persistent homes | Planned |
 | Inventory, crafting, and cooking | Planned |
@@ -23,6 +24,12 @@ The repository is being built phase by phase. GitHub is the source of truth.
 | Moonwood exploration | Planned |
 | Voice chat | Planned |
 | Progression and achievements | Planned |
+
+## Current phase
+
+**Phase 2 complete.** The web client has a small playable Lumenfall scene and a data-driven placeholder humanoid whose appearance can be edited live and saved or loaded in the browser.
+
+**Next: Phase 3 — Private Multiplayer Sessions.** Multiplayer is not implemented. The server currently exposes only a health endpoint; there are no rooms, invites, synchronized players, or reconnect handling.
 
 ## Tech stack
 
@@ -37,8 +44,8 @@ The repository is being built phase by phase. GitHub is the source of truth.
 ## Architecture
 
 ~~~text
-apps/web                 Web client and future 3D renderer
-apps/mobile              Expo client sharing game contracts
+apps/web                 Web client, Lumenfall renderer, and character creator
+apps/mobile              Expo foundation sharing game contracts
 apps/server              Replaceable realtime and HTTP server boundary
 packages/shared          Cross-platform domain contracts
 packages/game-core       Deterministic, platform-neutral game rules
@@ -47,7 +54,7 @@ packages/world-generation Deterministic world data boundary
 packages/database        Persistence port and in-memory development adapter
 ~~~
 
-The client is intentionally not coupled to a deployment provider. Realtime state will be server-authoritative, while durable state will remain separate from frame-by-frame movement.
+The client is intentionally not coupled to a deployment provider. Realtime state will be server-authoritative, while durable state will remain separate from frame-by-frame movement. The networking and database packages are ports, not finished services.
 
 ## Project structure
 
@@ -72,15 +79,17 @@ In a second terminal, run the server boundary with pnpm dev:server. The web app 
 
 ## Environment variables
 
-Copy .env.example to .env.local for local development. Never commit real secrets. The Phase 0 server does not require a database connection.
+Copy .env.example to .env.local for local development. Never commit real secrets. The current server does not require a database connection.
 
 ## Mobile
 
-The mobile foundation lives in apps/mobile and uses Expo. Run it with the Expo CLI after installing dependencies in the workspace.
+The mobile foundation lives in apps/mobile and uses Expo. The shared contracts are ready, but mobile gameplay and controls are not implemented.
 
 ## Assets
 
 No external game assets are included yet. See docs/ASSET_GUIDE.md, docs/ASSET_MANIFEST.md, and docs/ASSET_LICENSES.md before adding any asset.
+
+The current character is geometric placeholder art. Character appearance persistence currently uses browser storage as a temporary adapter; it must move to server/database persistence later. Build verification is currently blocked before compilation by the package mirror refusing the pinned Next.js and Expo dependency downloads.
 
 ## Roadmap
 
