@@ -24,12 +24,12 @@ No database is required in Phase 0. packages/database defines the persistence po
 
 ## Current phase
 
-Phase 0 — Foundation. The next coherent milestone is a hand-authored Lumenfall scene with a third-person camera, movement, lighting, terrain, and placeholder environment geometry.
+Phase 1 — 3D World. The web client now mounts a hand-authored Lumenfall scene with third-person movement, drag camera input, lighting, terrain, placeholder geometry, Rapier physics, and one proximity interaction.
 
 ## Unfinished tasks
 
-- Add Three.js, React Three Fiber, Drei, and Rapier when Phase 1 begins.
-- Build the small Lumenfall scene before attempting a large map.
+- Verify the web dependency set in an environment where the package mirror can serve the pinned Next.js and Three.js packages.
+- Add scene-level collision and a small interaction registry instead of keeping interaction targets inside the scene component.
 - Add the data-driven character system in Phase 2.
 - Replace the realtime placeholder with a server-authoritative WebSocket implementation in Phase 3.
 - Add PostgreSQL persistence only when the first durable gameplay feature needs it.
@@ -40,4 +40,4 @@ Do not download unverified assets. Record every source, creator, license, URL, a
 
 ## Known issues
 
-The web and mobile clients are foundations, not gameplay. The server responds to health checks but does not yet create sessions or synchronize players. The memory adapter is not durable. The CI workflow is prepared locally but its `.github/workflows` write was rejected by a GitHub edge filter; local dependency verification also needs a package mirror that can serve the pinned Next.js package.
+The mobile client and multiplayer systems are still foundations. The server responds to health checks but does not yet create sessions or synchronize players. The memory adapter is not durable. The CI workflow is prepared locally but its `.github/workflows` write was rejected by a GitHub edge filter; local dependency verification also needs a package mirror that can serve the pinned Next.js, Three.js, and Expo packages.
