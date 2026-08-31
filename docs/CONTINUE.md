@@ -24,13 +24,14 @@ No database is required in Phase 0. packages/database defines the persistence po
 
 ## Current phase
 
-Phase 1 — 3D World. The web client now mounts a hand-authored Lumenfall scene with third-person movement, drag camera input, lighting, terrain, placeholder geometry, Rapier physics, and one proximity interaction.
+Phase 2 — Character. The web client mounts a hand-authored Lumenfall scene with third-person movement, drag camera input, lighting, terrain, placeholder geometry, Rapier physics, one proximity interaction, and a data-driven 3D humanoid creator.
 
 ## Unfinished tasks
 
 - Verify the web dependency set in an environment where the package mirror can serve the pinned Next.js and Three.js packages.
 - Add scene-level collision and a small interaction registry instead of keeping interaction targets inside the scene component.
-- Add the data-driven character system in Phase 2.
+- Replace the provisional browser appearance adapter with server-backed character persistence when the database and account flow arrive.
+- Add animation clips and blend states around the current avatar once a licensed rigged asset is approved.
 - Replace the realtime placeholder with a server-authoritative WebSocket implementation in Phase 3.
 - Add PostgreSQL persistence only when the first durable gameplay feature needs it.
 
