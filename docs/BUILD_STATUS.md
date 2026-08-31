@@ -2,10 +2,19 @@
 
 | Field | Value |
 | --- | --- |
-| Current phase | Phase 2 — Character |
-| Current working features | Phase 0 and 1 foundation plus a data-driven 3D humanoid avatar, 8 skin tones, 3 body types, 5 faces, 5 eye styles, 8 hairstyles, 8 hair colors, 10 outfits, 10 accessories, live creator controls, and provisional save/load |
-| Currently blocked | CI workflow publication was rejected by a GitHub edge filter; local dependency installation remains blocked by the package mirror while resolving Next.js and Expo dependencies |
-| Next milestone | Phase 3 — private multiplayer sessions |
-| Missing assets | Licensed character, environment, building, furniture, creature, item, audio, and VFX assets; see ASSET_GUIDE.md |
-| Last successful build | Not established; verification is blocked before compilation |
-| Last GitHub commit | `feat: add Lumenfall 3D world foundation` |
+| Current Phase | Phase 2 complete |
+| Next Phase | Phase 3 — Private Multiplayer Sessions |
+| Phase 1 | COMPLETE |
+| Phase 2 | COMPLETE |
+| Phase 3 | NOT STARTED |
+| Current branch | `main` |
+| Latest feature commit | `339f0583f7a70283e8e92d7b5d8b44b066f28f4d` — `feat: add data-driven character creator` |
+| Current working features | Lumenfall 3D world, third-person movement, drag camera, Rapier body/ground physics, data-driven placeholder avatar, live character creator, browser save/load adapter |
+| Build verification | Blocked before compilation by the package mirror refusing pinned Next.js and Expo dependency downloads |
+| Dependency mirror problem | Full install fails resolving Expo's transitive `send` package; isolated web/server install fails fetching the pinned Next.js tarball |
+| Browser persistence limitation | Appearance save/load uses `localStorage` temporarily; it is not the final persistence layer |
+| Character asset limitation | The avatar is geometric placeholder art; a licensed rigged GLB and animation set are still required |
+| Multiplayer status | Not started; the server currently exposes only `/health` |
+| Mobile status | Foundation only; gameplay controls and 3D mobile rendering are not implemented |
+| CI status | `.github/workflows/ci.yml` could not be published because the GitHub edge filter rejected the workflow path |
+| Next implementation | Documented in `docs/PHASE_3_MULTIPLAYER.md`; do not begin it in this handoff |
