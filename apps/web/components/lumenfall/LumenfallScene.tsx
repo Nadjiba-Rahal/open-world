@@ -3,7 +3,7 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, RigidBody, CapsuleCollider, CuboidCollider, type RapierRigidBody } from "@react-three/rapier";
 import { Sky } from "@react-three/drei";
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from "react";
 import type { Group, PerspectiveCamera } from "three";
 import { MathUtils, Vector3 } from "three";
 
@@ -18,7 +18,7 @@ interface CameraInput {
 }
 
 interface PlayerControllerProps {
-  cameraInput: React.MutableRefObject<CameraInput>;
+  cameraInput: MutableRefObject<CameraInput>;
   onInteract: (position: Vector3) => void;
 }
 
