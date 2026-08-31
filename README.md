@@ -15,7 +15,7 @@ The repository is being built phase by phase. GitHub is the source of truth.
 | Mobile foundation | Implemented |
 | Asset documentation system | Implemented |
 | 3D world | In progress |
-| Character customization | Planned |
+| Character customization | In progress |
 | Multiplayer rooms | Planned |
 | Persistent homes | Planned |
 | Inventory, crafting, and cooking | Planned |
@@ -32,6 +32,7 @@ The repository is being built phase by phase. GitHub is the source of truth.
 - Node.js server boundary for realtime transport
 - PostgreSQL adapter boundary for persistent state
 - Three.js, React Three Fiber, Drei, and Rapier for the web world renderer
+- Data-driven character catalog shared by web and mobile
 
 ## Architecture
 
@@ -85,7 +86,7 @@ No external game assets are included yet. See docs/ASSET_GUIDE.md, docs/ASSET_MA
 
 1. Phase 0: foundation and contracts
 2. Phase 1: small, detailed 3D Lumenfall environment
-3. Phase 2: data-driven character creator
+3. Phase 2: data-driven character creator and provisional save/load
 4. Phase 3: private multiplayer sessions
 5. Phase 4: persistent homes and cooperative building
 6. Phase 5: inventory, crafting, cooking, quests, and NPCs
