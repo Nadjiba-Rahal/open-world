@@ -1,0 +1,9 @@
+{
+  "name": "@afterlight/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo/AppEntry.js",
+  "scripts": { "start": "expo start", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@afterlight/shared": "workspace:*", "expo": "52.0.36", "react": "18.3.1", "react-native": "0.76.9" },
+  "devDependencies": { "@types/react": "18.3.18", "typescript": "5.8.3" }
+}
