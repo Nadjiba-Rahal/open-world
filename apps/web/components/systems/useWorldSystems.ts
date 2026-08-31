@@ -1,13 +1,31 @@
 "use client";
 
-import { addItems, applyQuestProgress, canBuild, canDecorate, craft, grantExperience, itemQuantity } from "@afterlight/game-core";
-import { createDefaultHome, createDefaultProgression, FURNITURE_CATALOG, ITEM_CATALOG, QUEST_CATALOG, RECIPE_CATALOG, type HomeObject, type HomeRole, type HomeState, type InventorySlot, type PlayerId, type ProgressionState, type QuestProgress } from "@afterlight/shared";
+import { addItems, applyQuestProgress, canBuild, canDecorate, completeQuest, craft, grantExperience, itemQuantity } from "@afterlight/game-core";
+import { createDefaultHome, createDefaultProgression, FURNITURE_CATALOG, ITEM_CATALOG, QUEST_CATALOG, RECIPE_CATALOG, type HomeObject, type HomeRole, type HomeState, type InventorySlot, type PlayerId, type ProgressionState, type QuestDefinition, type QuestProgress } from "@afterlight/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface WorldSystemsOptions {
   ownerId: PlayerId;
   remoteHome: HomeState | null;
   onHomeChange: (home: HomeState) => void;
+}
+
+interface QuestAdvance {
+  progress: QuestProgress[];
+  completed: QuestDefinition[];
+}
+
+function advanceQuests(current: QuestProgress[], matches: (quest: QuestDefinition) => boolean, amount: number): QuestAdvance {
+  let progress = current;
+  const completed: QuestDefinition[] = [];
+  for (const quest of QUEST_CATALOG) {
+    if (!matches(quest)) continue;
+    const before = progress.find((entry) => entry.questId === quest.id);
+    progress = completeQuest(applyQuestProgress(progress, quest, amount), quest);
+    const after = progress.find((entry) => entry.questId === quest.id);
+    if (before?.state !== "completed" && after?.state === "completed") completed.push(quest);
+  }
+  return { progress, completed };
 }
 
 export function useWorldSystems({ ownerId, remoteHome, onHomeChange }: WorldSystemsOptions) {
@@ -42,56 +60,56 @@ export function useWorldSystems({ ownerId, remoteHome, onHomeChange }: WorldSyst
   }, []);
 
   const gather = useCallback((itemId: string, quantity = 1) => {
-    setInventory((current) => {
-      const next = addItems(current, [{ itemId, quantity }], ITEM_CATALOG);
-      persist("afterlight.inventory", next);
-      return next;
-    });
-    setQuests((current) => {
-      const next = QUEST_CATALOG.reduce((list, quest) => quest.type === "collect" && quest.targetId === itemId ? applyQuestProgress(list, quest, quantity) : list, current);
-      persist("afterlight.quests", next);
-      return next;
-    });
-    setProgression((current) => {
-      const next = grantExperience(current, 5);
-      persist("afterlight.progression", next);
-      return next;
-    });
-  }, [persist]);
+    const questAdvance = advanceQuests(quests, (quest) => quest.type === "collect" && quest.targetId === itemId, quantity);
+    let nextInventory = addItems(inventory, [{ itemId, quantity }], ITEM_CATALOG);
+    let nextProgression = grantExperience(progression, 5);
+    for (const quest of questAdvance.completed) {
+      nextInventory = addItems(nextInventory, quest.rewardItems ?? [], ITEM_CATALOG);
+      nextProgression = grantExperience(nextProgression, quest.rewardXp);
+    }
+    setInventory(nextInventory);
+    persist("afterlight.inventory", nextInventory);
+    setQuests(questAdvance.progress);
+    persist("afterlight.quests", questAdvance.progress);
+    setProgression(nextProgression);
+    persist("afterlight.progression", nextProgression);
+  }, [inventory, persist, progression, quests]);
 
   const craftRecipe = useCallback((recipeId: string) => {
     const recipe = RECIPE_CATALOG.find((candidate) => candidate.id === recipeId);
     if (!recipe) return false;
-    const nextInventory = craft(inventory, recipe, ITEM_CATALOG);
-    if (!nextInventory) return false;
+    const craftedInventory = craft(inventory, recipe, ITEM_CATALOG);
+    if (!craftedInventory) return false;
+    const questAdvance = advanceQuests(quests, (quest) => quest.type === "craft" && quest.targetId === recipeId, 1);
+    let nextInventory = craftedInventory;
+    let nextProgression = grantExperience(progression, 12);
+    for (const quest of questAdvance.completed) {
+      nextInventory = addItems(nextInventory, quest.rewardItems ?? [], ITEM_CATALOG);
+      nextProgression = grantExperience(nextProgression, quest.rewardXp);
+    }
     setInventory(nextInventory);
     persist("afterlight.inventory", nextInventory);
-    setProgression((current) => {
-      const next = grantExperience(current, 12);
-      persist("afterlight.progression", next);
-      return next;
-    });
-    setQuests((current) => {
-      const next = QUEST_CATALOG.reduce((list, quest) => quest.type === "craft" && quest.targetId === recipeId ? applyQuestProgress(list, quest) : list, current);
-      persist("afterlight.quests", next);
-      return next;
-    });
+    setProgression(nextProgression);
+    persist("afterlight.progression", nextProgression);
+    setQuests(questAdvance.progress);
+    persist("afterlight.quests", questAdvance.progress);
     return true;
-  }, [inventory, persist]);
+  }, [inventory, persist, progression, quests]);
 
   const discover = useCallback((discoveryId: string) => {
-    setProgression((current) => {
-      if (current.discoveredLocations.includes(discoveryId)) return current;
-      const next = { ...current, discoveredLocations: [...current.discoveredLocations, discoveryId] };
-      persist("afterlight.progression", next);
-      return next;
-    });
-    setQuests((current) => {
-      const next = QUEST_CATALOG.reduce((list, quest) => quest.type === "discover" && quest.targetId === discoveryId ? applyQuestProgress(list, quest) : list, current);
-      persist("afterlight.quests", next);
-      return next;
-    });
-  }, [persist]);
+    if (progression.discoveredLocations.includes(discoveryId)) return;
+    const questAdvance = advanceQuests(quests, (quest) => quest.type === "discover" && quest.targetId === discoveryId, 1);
+    let nextProgression = { ...progression, discoveredLocations: [...progression.discoveredLocations, discoveryId] };
+    for (const quest of questAdvance.completed) nextProgression = grantExperience(nextProgression, quest.rewardXp);
+    let nextInventory = inventory;
+    for (const quest of questAdvance.completed) nextInventory = addItems(nextInventory, quest.rewardItems ?? [], ITEM_CATALOG);
+    setProgression(nextProgression);
+    persist("afterlight.progression", nextProgression);
+    setInventory(nextInventory);
+    persist("afterlight.inventory", nextInventory);
+    setQuests(questAdvance.progress);
+    persist("afterlight.quests", questAdvance.progress);
+  }, [inventory, persist, progression, quests]);
 
   const updateHome = useCallback((change: (current: HomeState) => HomeState) => {
     setHome((current) => {
