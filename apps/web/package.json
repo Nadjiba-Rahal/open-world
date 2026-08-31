@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": { "dev": "next dev", "build": "next build", "start": "next start", "typecheck": "tsc --noEmit" },
-  "dependencies": { "@afterlight/shared": "workspace:*", "next": "15.4.6", "react": "19.1.1", "react-dom": "19.1.1" },
-  "devDependencies": { "@types/node": "22.15.21", "@types/react": "19.1.2", "@types/react-dom": "19.1.2", "typescript": "5.8.3" }
+  "dependencies": {
+    "@afterlight/game-core": "workspace:*",
+    "@afterlight/shared": "workspace:*",
+    "@react-three/drei": "10.7.6",
+    "@react-three/fiber": "9.3.0",
+    "@react-three/rapier": "2.1.0",
+    "next": "15.4.6",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "three": "0.178.0"
+  },
+  "devDependencies": { "@types/node": "22.15.21", "@types/react": "19.1.2", "@types/react-dom": "19.1.2", "@types/three": "0.178.1", "typescript": "5.8.3" }
 }
