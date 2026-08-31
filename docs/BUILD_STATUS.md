@@ -15,6 +15,6 @@
 | Browser persistence limitation | Appearance save/load uses `localStorage` temporarily; it is not the final persistence layer |
 | Character asset limitation | The avatar is geometric placeholder art; a licensed rigged GLB and animation set are still required |
 | Multiplayer status | Core milestone implemented; standalone WebSocket server exposes `/ws`, with in-memory invite-only sessions, server-validated movement, home synchronization, permissions, and emotes |
-| Mobile status | Shared-contract foundation only; touch controls and native 3D rendering remain |
+| Mobile status | Shared-contract and touch-input foundation; native 3D rendering remains |
 | CI status | `.github/workflows/ci.yml` could not be published because the GitHub edge filter rejected the workflow path |
 | Next implementation | Verify the browser flow, then move durable inventory/home/profile persistence from local adapters into the database boundary |

@@ -22,7 +22,7 @@ The repository is being built in coherent feature batches. GitHub is the source 
 | Inventory, crafting, and cooking | Foundation implemented (catalogs + browser state) |
 | Quests and NPCs | Foundation implemented (progress tracking + scheduled dialogue) |
 | Moonwood exploration | Foundation implemented (trail, discoveries, portal markers) |
-| Voice chat | Planned; transport boundary not yet connected |
+| Voice chat | Explicit foundation only (unavailable transport boundary) |
 | Progression and achievements | Foundation implemented (XP/level + discovery progress) |
 
 ## Current phase
