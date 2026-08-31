@@ -1,4 +1,5 @@
 import type { InventorySlot, ItemDefinition, NpcDefinition, NpcState, PlayerId, ProgressionState, QuestDefinition, QuestProgress, RecipeDefinition } from "@afterlight/shared";
+import { levelFromXp, xpForLevel } from "@afterlight/shared";
 
 export interface GameClock { elapsedSeconds: number; dayProgress: number; }
 export function createGameClock(nowMs: number, dayLengthMs = 1_200_000): GameClock { return { elapsedSeconds: nowMs / 1000, dayProgress: (nowMs % dayLengthMs) / dayLengthMs }; }
@@ -67,9 +68,31 @@ export function completeQuest(progress: QuestProgress[], quest: QuestDefinition)
   return progress.map((entry) => entry.questId === quest.id && entry.progress >= quest.targetQuantity ? { ...entry, state: "completed" } : entry);
 }
 
+export function isQuestAvailable(quest: QuestDefinition, progress: QuestProgress[]): boolean {
+  if (quest.prerequisiteIds) {
+    for (const prereqId of quest.prerequisiteIds) {
+      const prereq = progress.find((entry) => entry.questId === prereqId);
+      if (!prereq || prereq.state !== "completed") return false;
+    }
+  }
+  return true;
+}
+
+export function updateQuestStates(progress: QuestProgress[], quests: QuestDefinition[]): QuestProgress[] {
+  return progress.map((entry) => {
+    const quest = quests.find((q) => q.id === entry.questId);
+    if (!quest) return entry;
+    if (entry.state === "completed") return entry;
+    if (entry.state === "available" && !isQuestAvailable(quest, progress)) return entry;
+    if (entry.state === "locked" && isQuestAvailable(quest, progress)) return { ...entry, state: "available" as const };
+    if (entry.state === "available" && !isQuestAvailable(quest, progress)) return { ...entry, state: "locked" as const };
+    return entry;
+  });
+}
+
 export function grantExperience(state: ProgressionState, amount: number): ProgressionState {
   const experience = Math.max(0, state.experience + amount);
-  return { ...state, experience, level: Math.max(1, Math.floor(experience / 100) + 1) };
+  return { ...state, experience, level: levelFromXp(experience) };
 }
 
 export function unlockAchievement(state: ProgressionState, achievementId: string): ProgressionState {
@@ -107,4 +130,17 @@ export function npcStateAt(npc: NpcDefinition, dayProgress: number): NpcState {
   return npc.schedule.find((entry) => normalized >= entry.start && normalized < entry.end)?.state ?? "idle";
 }
 
+export function isNight(dayProgress: number): boolean {
+  const hours = Math.floor(dayProgress * 24);
+  return hours >= 21 || hours < 5;
+}
 
+export function levelProgress(state: ProgressionState): { currentLevelXp: number; nextLevelXp: number; percent: number } {
+  const currentLevel = state.level;
+  const currentLevelXp = xpForLevel(currentLevel);
+  const nextLevelXp = xpForLevel(currentLevel + 1);
+  const xpIntoLevel = state.experience - currentLevelXp;
+  const xpForThisLevel = nextLevelXp - currentLevelXp;
+  const percent = Math.min(100, (xpIntoLevel / xpForThisLevel) * 100);
+  return { currentLevelXp, nextLevelXp, percent };
+}
