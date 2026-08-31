@@ -1,8 +1,9 @@
 "use client";
 
 import { addItems, applyQuestProgress, canBuild, canDecorate, completeQuest, craft, grantExperience, itemQuantity, unlockAchievement } from "@afterlight/game-core";
-import { createDefaultHome, createDefaultProgression, FURNITURE_CATALOG, ITEM_CATALOG, QUEST_CATALOG, RECIPE_CATALOG, RESOURCE_NODES, type HomeObject, type HomeRole, type HomeState, type InventorySlot, type PlayerId, type PlayerProfile, type ProgressionState, type QuestDefinition, type QuestProgress, type ResourceNodeDefinition } from "@afterlight/shared";
+import { createDefaultHome, createDefaultProgression, ITEM_CATALOG, QUEST_CATALOG, RECIPE_CATALOG, type HomeObject, type HomeRole, type HomeState, type InventorySlot, type PlayerId, type PlayerProfile, type ProgressionState, type QuestDefinition, type QuestProgress, type ResourceNodeDefinition } from "@afterlight/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { playSfx, sfxForResourceKind } from "../audio/gameAudio";
 
 interface WorldSystemsOptions {
   ownerId: PlayerId;
@@ -88,6 +89,9 @@ export function useWorldSystems({ ownerId, remoteHome, onHomeChange, onProfileSy
       nextInventory = addItems(nextInventory, quest.rewardItems ?? [], ITEM_CATALOG);
       nextProgression = grantExperience(nextProgression, quest.rewardXp);
     }
+    if (nextProgression.level > progression.level) playSfx("level-up");
+    else playSfx("xp-gain");
+    if (questAdvance.completed.length > 0) playSfx("quest-complete");
     setInventory(nextInventory);
     setQuests(questAdvance.progress);
     setProgression(nextProgression);
@@ -103,6 +107,7 @@ export function useWorldSystems({ ownerId, remoteHome, onHomeChange, onProfileSy
     }
 
     setNodeCooldowns((prev) => ({ ...prev, [node.id]: now + node.respawnTimeSeconds * 1000 }));
+    playSfx(sfxForResourceKind(node.kind, node.itemId));
     gather(node.itemId, node.yieldQuantity);
     return { success: true, notice: `Gathered +${node.yieldQuantity} ${node.itemId} from ${node.name}` };
   }, [gather, nodeCooldowns]);
@@ -121,6 +126,10 @@ export function useWorldSystems({ ownerId, remoteHome, onHomeChange, onProfileSy
       nextInventory = addItems(nextInventory, quest.rewardItems ?? [], ITEM_CATALOG);
       nextProgression = grantExperience(nextProgression, quest.rewardXp);
     }
+    playSfx(recipe.station === "kitchen" ? "cook" : "craft");
+    if (nextProgression.level > progression.level) playSfx("level-up");
+    else playSfx("xp-gain");
+    if (questAdvance.completed.length > 0) playSfx("quest-complete");
     setInventory(nextInventory);
     setProgression(nextProgression);
     setQuests(questAdvance.progress);
@@ -141,6 +150,9 @@ export function useWorldSystems({ ownerId, remoteHome, onHomeChange, onProfileSy
     for (const quest of questAdvance.completed) nextProgression = grantExperience(nextProgression, quest.rewardXp);
     let nextInventory = inventory;
     for (const quest of questAdvance.completed) nextInventory = addItems(nextInventory, quest.rewardItems ?? [], ITEM_CATALOG);
+    if (!alreadyDiscovered) playSfx("discovery");
+    if (nextProgression.level > progression.level) playSfx("level-up");
+    if (questAdvance.completed.length > 0) playSfx("quest-complete");
 
     setProgression(nextProgression);
     setInventory(nextInventory);
@@ -173,6 +185,7 @@ export function useWorldSystems({ ownerId, remoteHome, onHomeChange, onProfileSy
       };
       return { ...current, objects: [...current.objects, object] };
     });
+    playSfx("place-furniture");
     // Check building quest
     const questAdvance = advanceQuests(quests, (quest) => quest.type === "build", 1);
     if (questAdvance.completed.length > 0) {
@@ -186,6 +199,7 @@ export function useWorldSystems({ ownerId, remoteHome, onHomeChange, onProfileSy
       setInventory(nextInventory);
       setQuests(questAdvance.progress);
       syncState(nextInventory, nextProgression, questAdvance.progress, home);
+      playSfx("quest-complete");
     }
   }, [home, inventory, progression, quests, syncState, updateHome]);
 
@@ -199,6 +213,7 @@ export function useWorldSystems({ ownerId, remoteHome, onHomeChange, onProfileSy
       };
       return { ...current, objects: [...current.objects, object] };
     });
+    playSfx("place-furniture");
     const questAdvance = advanceQuests(quests, (quest) => quest.type === "build", 1);
     if (questAdvance.completed.length > 0) {
       let nextProgression = unlockAchievement(progression, "homestead-builder");
@@ -211,12 +226,19 @@ export function useWorldSystems({ ownerId, remoteHome, onHomeChange, onProfileSy
       setInventory(nextInventory);
       setQuests(questAdvance.progress);
       syncState(nextInventory, nextProgression, questAdvance.progress, home);
+      playSfx("quest-complete");
     }
   }, [home, inventory, progression, quests, syncState, updateHome]);
 
   const moveFurniture = useCallback((id: string, dx: number, dz: number) => updateHome((current) => ({ ...current, objects: current.objects.map((object) => object.id === id ? { ...object, position: { ...object.position, x: object.position.x + dx, z: object.position.z + dz } } : object) })), [updateHome]);
-  const rotateFurniture = useCallback((id: string) => updateHome((current) => ({ ...current, objects: current.objects.map((object) => object.id === id ? { ...object, rotation: object.rotation + Math.PI / 2 } : object) })), [updateHome]);
-  const deleteFurniture = useCallback((id: string) => updateHome((current) => ({ ...current, objects: current.objects.filter((object) => object.id !== id) })), [updateHome]);
+  const rotateFurniture = useCallback((id: string) => {
+    playSfx("rotate-furniture");
+    updateHome((current) => ({ ...current, objects: current.objects.map((object) => object.id === id ? { ...object, rotation: object.rotation + Math.PI / 2 } : object) }));
+  }, [updateHome]);
+  const deleteFurniture = useCallback((id: string) => {
+    playSfx("store-furniture");
+    updateHome((current) => ({ ...current, objects: current.objects.filter((object) => object.id !== id) }));
+  }, [updateHome]);
   const setHomePermission = useCallback((playerId: string, role: HomeRole) => updateHome((current) => ({ ...current, permissions: { ...current.permissions, [playerId]: role } })), [updateHome]);
   const role = home.permissions[ownerId] ?? "visitor";
 
@@ -248,4 +270,4 @@ export function useWorldSystems({ ownerId, remoteHome, onHomeChange, onProfileSy
     }),
     hydrated: hydrated.current
   };
-}
+}

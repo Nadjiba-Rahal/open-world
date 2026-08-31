@@ -2,6 +2,7 @@
 
 import type { PlayerSnapshot, SessionDescriptor } from "@afterlight/shared";
 import { useState, type FormEvent } from "react";
+import { playSfx } from "../audio/gameAudio";
 import type { MultiplayerConnectionStatus } from "./useMultiplayerSession";
 
 interface MultiplayerPanelProps {
@@ -29,16 +30,18 @@ export function MultiplayerPanel({ status, session, selfId, players, error, onCr
 
   const submitCreate = (event: FormEvent) => {
     event.preventDefault();
+    playSfx("ui-click");
     onCreate(name.trim() || "Traveler");
   };
   const submitJoin = (event: FormEvent) => {
     event.preventDefault();
+    playSfx("ui-click");
     if (code.trim()) onJoin(code, name.trim() || "Traveler");
   };
 
   return (
     <aside className={`multiplayer ${open ? "is-open" : ""}`}>
-      <button className="multiplayer-toggle" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+      <button className="multiplayer-toggle" type="button" onClick={() => { playSfx("ui-click"); setOpen((value) => !value); }} onMouseEnter={() => playSfx("ui-hover")} aria-expanded={open}>
         <span><i className={`connection-dot ${status}`} />Friends in Lumenfall</span>
         <span aria-hidden="true">{open ? "−" : "+"}</span>
       </button>
@@ -54,7 +57,7 @@ export function MultiplayerPanel({ status, session, selfId, players, error, onCr
             <div className="player-list">
               {players.map((player) => <div className="player-row" key={player.id}><span className={`player-dot ${player.connected ? "online" : "away"}`} /><span>{player.displayName}{player.id === selfId ? " (you)" : ""}</span><small>{player.connected ? "here" : "reconnecting"}</small></div>)}
             </div>
-            <button type="button" className="leave-action" onClick={onLeave}>Leave session</button>
+            <button type="button" className="leave-action" onClick={() => { playSfx("ui-click"); onLeave(); }}>Leave session</button>
           </>
         ) : (
           <>

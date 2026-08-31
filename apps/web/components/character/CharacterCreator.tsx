@@ -2,6 +2,7 @@
 
 import { CHARACTER_OPTIONS, type CharacterAppearance } from "@afterlight/shared";
 import { useState, type ChangeEvent } from "react";
+import { playSfx } from "../audio/gameAudio";
 
 interface CharacterCreatorProps {
   appearance: CharacterAppearance;
@@ -30,7 +31,7 @@ export function CharacterCreator({ appearance, onChange, onSave, onLoad, saved }
 
   return (
     <aside className={`creator ${open ? "is-open" : ""}`}>
-      <button className="creator-toggle" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+      <button className="creator-toggle" type="button" onClick={() => { playSfx("ui-click"); setOpen((value) => !value); }} onMouseEnter={() => playSfx("ui-hover")} aria-expanded={open}>
         <span>Character</span><span aria-hidden="true">{open ? "−" : "+"}</span>
       </button>
       {open && <div className="creator-body">
@@ -42,8 +43,8 @@ export function CharacterCreator({ appearance, onChange, onSave, onLoad, saved }
           <label><span>Accessory</span><select value={appearance.accessories[0] ?? "none"} onChange={updateAccessory}>{CHARACTER_OPTIONS.accessories.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select></label>
         </div>
         <div className="creator-actions">
-          <button type="button" className="primary-action" onClick={onSave}>Save appearance</button>
-          <button type="button" className="secondary-action" onClick={onLoad}>Load saved</button>
+          <button type="button" className="primary-action" onClick={() => { playSfx("ui-click"); onSave(); }}>Save appearance</button>
+          <button type="button" className="secondary-action" onClick={() => { playSfx("ui-click"); onLoad(); }}>Load saved</button>
         </div>
         <p className="save-state" role="status">{saved ? "Appearance saved for this browser." : "Unsaved changes"}</p>
       </div>}

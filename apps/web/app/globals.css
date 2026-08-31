@@ -111,6 +111,11 @@ button { font: inherit; }
 .emote-grid button { display: flex; align-items: center; gap: .35rem; padding: .45rem; border: 1px solid rgba(243,239,228,.14); color: var(--ink); background: rgba(243,239,228,.05); cursor: pointer; font: .6rem system-ui, sans-serif; }
 .emote-grid button b { color: var(--accent); font-size: 1rem; }
 .photo-toggle { align-self: flex-start; padding: .45rem .6rem; border: 1px solid rgba(243,239,228,.26); color: var(--ink); background: rgba(16,20,18,.45); cursor: pointer; font: .6rem system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.audio-dock { position: absolute; top: 5.2rem; left: 50%; transform: translateX(-50%); pointer-events: auto; display: flex; align-items: center; gap: .55rem; padding: .45rem .7rem; border: 1px solid rgba(243,239,228,.18); background: rgba(16,20,18,.84); backdrop-filter: blur(16px); max-width: min(540px, calc(100vw - 2rem)); flex-wrap: wrap; justify-content: center; }
+.audio-mute { padding: .3rem .5rem; border: 1px solid rgba(243,239,228,.26); color: var(--ink); background: transparent; cursor: pointer; font: .58rem system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.audio-mute[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.audio-slider { display: flex; align-items: center; gap: .3rem; color: rgba(243,239,228,.7); font: .55rem system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase; }
+.audio-slider input { width: 4.2rem; accent-color: var(--accent); }
 .scene-ui.photo-mode > :not(.scene-top), .scene-ui.photo-mode .scene-top > :not(.photo-toggle) { display: none; }
 .scene-ui.photo-mode .scene-top { justify-content: flex-end; }
 .objective { max-width: 330px; padding: .9rem 1.05rem; border-left: 2px solid var(--accent); background: linear-gradient(90deg, rgba(12,17,15,.7), transparent); }

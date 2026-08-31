@@ -30,6 +30,9 @@ import { formatTimeOfDay, npcStateAt } from "@afterlight/game-core";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from "react";
 import type { Group, PerspectiveCamera } from "three";
 import { MathUtils, Vector3 } from "three";
+import { AudioSettingsPanel } from "../audio/AudioSettingsPanel";
+import { gameAudio, playSfx } from "../audio/gameAudio";
+import { useGameAudio } from "../audio/useGameAudio";
 import { CharacterAvatar } from "../character/CharacterAvatar";
 import { CharacterCreator } from "../character/CharacterCreator";
 import { MultiplayerPanel } from "../multiplayer/MultiplayerPanel";
@@ -644,8 +647,16 @@ export default function LumenfallScene() {
     onHomeChange: multiplayer.updateHome,
     onProfileSync: multiplayer.syncProfile
   });
+  const worldId = multiplayer.session?.worldId ?? "lumenfall";
+  const { settings: audioSettings, updateSettings: updateAudioSettings } = useGameAudio(worldId, atmosphere.dayProgress, atmosphere.weather);
 
   const { harvestNode, discover, placeFurnitureAt, rotateFurniture, deleteFurniture } = systems;
+
+  useEffect(() => {
+    if (!multiplayer.latestWorldEvent) return;
+    if (multiplayer.latestWorldEvent.playerId === multiplayer.selfId) return;
+    playSfx("world-event");
+  }, [multiplayer.latestWorldEvent, multiplayer.selfId]);
 
   useEffect(() => {
     const updateAtmosphere = () =>
@@ -659,6 +670,7 @@ export default function LumenfallScene() {
 
   const onPlayerUpdate = useCallback(
     (update: Pick<PlayerSnapshot, "position" | "rotation" | "movement">) => {
+      if (update.movement === "walking" || update.movement === "sprinting") gameAudio.playFootstep();
       multiplayer.updatePlayer(update);
     },
     [multiplayer]
@@ -728,6 +740,8 @@ export default function LumenfallScene() {
             id: npc.id,
             label: `Talk to ${npc.name}`,
             action: () => {
+              playSfx("npc-talk");
+              if (assignedQuest) playSfx("quest-accept");
               setActiveDialogue({ npc, lineIndex: 0, activeQuest: assignedQuest });
             }
           };
@@ -761,6 +775,7 @@ export default function LumenfallScene() {
             action: () => {
               if (portal.state === "unlocked") {
                 discover("moonwood");
+                playSfx("portal-travel");
                 setNotice("You step toward the Moonwood portal. The ancient leaves rustle in greeting.");
               } else {
                 setNotice("The quiet portal remains sealed by ancient starlight.");
@@ -790,6 +805,7 @@ export default function LumenfallScene() {
   }, [activeDialogue, activePrompt]);
 
   const handleBuildKey = useCallback(() => {
+    playSfx("ui-click");
     setInBuildMode((prev) => !prev);
     setSelectedObjectId(null);
   }, []);
@@ -808,13 +824,13 @@ export default function LumenfallScene() {
   }, [placeFurnitureAt, selectedFurnitureId]);
 
   const pointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest(".creator, .multiplayer, .systems, .photo-toggle, .dialogue-modal, .build-toolbar, .interaction-prompt")) return;
+    if ((event.target as HTMLElement).closest(".creator, .multiplayer, .systems, .photo-toggle, .dialogue-modal, .build-toolbar, .interaction-prompt, .audio-dock")) return;
     drag.current = { active: true, x: event.clientX, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
 
   const pointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!drag.current.active || (event.target as HTMLElement).closest(".creator, .multiplayer, .systems, .photo-toggle, .dialogue-modal, .build-toolbar, .interaction-prompt")) return;
+    if (!drag.current.active || (event.target as HTMLElement).closest(".creator, .multiplayer, .systems, .photo-toggle, .dialogue-modal, .build-toolbar, .interaction-prompt, .audio-dock")) return;
     const dx = event.clientX - drag.current.x;
     const dy = event.clientY - drag.current.y;
     drag.current.x = event.clientX;
@@ -863,10 +879,11 @@ export default function LumenfallScene() {
               {timeData.timeString} · {timeData.phase} · {atmosphere.weather}
             </span>
           </div>
-          <button className="photo-toggle" type="button" onClick={() => setPhotoMode((value) => !value)}>
+          <button className="photo-toggle" type="button" onClick={() => { playSfx("ui-click"); setPhotoMode((value) => !value); }}>
             {photoMode ? "Exit photo" : "Photo mode"}
           </button>
         </div>
+        <AudioSettingsPanel settings={audioSettings} onChange={updateAudioSettings} />
 
         <CharacterCreator
           appearance={appearance}
@@ -916,12 +933,15 @@ export default function LumenfallScene() {
                 key={item.id}
                 type="button"
                 className={`build-item-btn ${selectedFurnitureId === item.id ? "selected" : ""}`}
-                onClick={() => setSelectedFurnitureId(item.id)}
+                onClick={() => {
+                  playSfx("ui-click");
+                  setSelectedFurnitureId(item.id);
+                }}
               >
                 {item.name}
               </button>
             ))}
-            <button type="button" className="primary-action build-action-btn" onClick={handlePlaceFurniture}>
+            <button type="button" className="primary-action build-action-btn" onClick={() => { playSfx("ui-click"); handlePlaceFurniture(); }}>
               Place [Space]
             </button>
             {selectedObjectId && (
@@ -1017,7 +1037,10 @@ export default function LumenfallScene() {
                 type="button"
                 className="secondary-action"
                 onClick={() =>
-                  setActiveDialogue((prev) => (prev ? { ...prev, lineIndex: prev.lineIndex + 1 } : null))
+                  setActiveDialogue((prev) => {
+                    playSfx("npc-talk");
+                    return prev ? { ...prev, lineIndex: prev.lineIndex + 1 } : null;
+                  })
                 }
               >
                 Next line
@@ -1025,7 +1048,10 @@ export default function LumenfallScene() {
               <button
                 type="button"
                 className="primary-action"
-                onClick={() => setActiveDialogue(null)}
+                onClick={() => {
+                  playSfx("ui-click");
+                  setActiveDialogue(null);
+                }}
               >
                 Close [E]
               </button>
@@ -1037,4 +1063,4 @@ export default function LumenfallScene() {
       {notice && <div className="interaction" role="status">{notice}</div>}
     </div>
   );
-}
+}
