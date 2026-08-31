@@ -27,7 +27,7 @@ export interface NpcDefinition { id: string; name: string; location: WorldId; po
 export type DiscoveryType = "location" | "resource" | "creature" | "recipe" | "portal" | "secret";
 export interface DiscoveryDefinition { id: string; name: string; type: DiscoveryType; description: string; region?: WorldId; }
 export type PortalState = "unlocked" | "quest-locked" | "discovery-locked" | "mysterious";
-export interface PortalDefinition { id: string; name: string; destination: WorldId; position: { x: number; y: number; z: number }; state: PortalState; requirement?: string; }
+export interface PortalDefinition { id: string; name: string; destination: WorldId; position: { x: number; y: number; z: number }; state: PortalState; requirement?: string; region?: WorldId; }
 export interface ProgressionState { experience: number; level: number; achievements: string[]; discoveredRecipes: string[]; discoveredLocations: string[]; collectibles: string[]; }
 export type EmoteId = "wave" | "sit" | "dance" | "clap" | "bow" | "laugh" | "point" | "celebrate" | "sleep";
 export interface EmoteDefinition { id: EmoteId; name: string; symbol: string; }
@@ -396,10 +396,10 @@ export const NPC_CATALOG: NpcDefinition[] = [
 ];
 
 export const PORTAL_CATALOG: PortalDefinition[] = [
-  { id: "moonwood-gate", name: "Moonwood trail", destination: "moonwood", position: { x: -13, y: 0, z: -10 }, state: "unlocked" },
-  { id: "astral-gate", name: "Astral Vale rift", destination: "astral-vale", position: { x: 13, y: 0, z: -10 }, state: "quest-locked", requirement: "Complete the Moonwood broth quest" },
-  { id: "return-lumenfall", name: "Return to Lumenfall", destination: "lumenfall", position: { x: 13, y: 0, z: 10 }, state: "unlocked" },
-  { id: "return-lumenfall-from-astral", name: "Return to Lumenfall", destination: "lumenfall", position: { x: 13, y: 0, z: 10 }, state: "unlocked" }
+  { id: "moonwood-gate", name: "Moonwood trail", destination: "moonwood", position: { x: -13, y: 0, z: -10 }, state: "unlocked", region: "lumenfall" },
+  { id: "astral-gate", name: "Astral Vale rift", destination: "astral-vale", position: { x: 13, y: 0, z: -10 }, state: "quest-locked", requirement: "Complete the Moonwood broth quest", region: "lumenfall" },
+  { id: "return-lumenfall", name: "Return to Lumenfall", destination: "lumenfall", position: { x: 13, y: 0, z: 10 }, state: "unlocked", region: "moonwood" },
+  { id: "return-lumenfall-from-astral", name: "Return to Lumenfall", destination: "lumenfall", position: { x: 13, y: 0, z: 10 }, state: "unlocked", region: "astral-vale" }
 ];
 
 export const REGION_CATALOG: RegionDefinition[] = [

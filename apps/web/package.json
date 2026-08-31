@@ -5,6 +5,7 @@
   "scripts": { "dev": "next dev", "build": "next build", "start": "next start", "typecheck": "tsc --noEmit" },
   "dependencies": {
     "@afterlight/game-core": "workspace:*",
+    "@afterlight/networking": "workspace:*",
     "@afterlight/shared": "workspace:*",
     "@react-three/drei": "10.7.6",
     "@react-three/fiber": "9.3.0",

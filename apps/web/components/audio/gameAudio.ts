@@ -276,7 +276,7 @@ class GameAudioEngine {
     this.musicStep = 0;
     const tick = () => {
       if (!this.ctx || !this.musicGain) return;
-      const freq = notes[this.musicStep % notes.length] * (this.musicStep % 7 === 0 ? 0.5 : 1);
+      const freq = notes[this.musicStep % notes.length]! * (this.musicStep % 7 === 0 ? 0.5 : 1);
       this.musicStep += 1;
       const osc = this.ctx.createOscillator();
       const filter = this.ctx.createBiquadFilter();

@@ -23,7 +23,7 @@ export function useGameAudio(worldId: WorldId, dayProgress: number, weather: Wea
   }, []);
 
   useEffect(() => {
-    const region = REGION_CATALOG.find((entry) => entry.id === worldId) ?? REGION_CATALOG[0];
+    const region = REGION_CATALOG.find((entry) => entry.id === worldId) ?? REGION_CATALOG[0]!;
     const night = isNight(dayProgress);
     const music = region.id === "lumenfall" && night ? "lumenfall-night" : region.music;
     const ambience =

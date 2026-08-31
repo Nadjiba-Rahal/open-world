@@ -12,6 +12,7 @@ import {
   NPC_CATALOG,
   PORTAL_CATALOG,
   QUEST_CATALOG,
+  REGION_CATALOG,
   RESOURCE_NODES,
   createDefaultAppearance,
   type CharacterAppearance,
@@ -23,8 +24,13 @@ import {
   type NpcDefinition,
   type PlayerId,
   type PlayerSnapshot,
+  type PortalDefinition,
+  type PortalState,
+  type QuestProgress,
+  type RegionDefinition,
   type ResourceNodeDefinition,
-  type WorldAtmosphere
+  type WorldAtmosphere,
+  type WorldId
 } from "@afterlight/shared";
 import { formatTimeOfDay, npcStateAt } from "@afterlight/game-core";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from "react";
@@ -46,6 +52,42 @@ const INTERACTION_DISTANCE = 3.6;
 const LANTERN_STONE_POS = new Vector3(4.5, 0, -3.5);
 const HOME_PLOT_CENTER = new Vector3(-6, 0, 7.5);
 
+const REGION_SPAWNS: Record<string, { x: number; y: number; z: number }> = {
+  lumenfall: { x: 0, y: 1.2, z: 7 },
+  moonwood: { x: -3, y: 1.2, z: 3 },
+  "astral-vale": { x: 0, y: 1.2, z: 5 }
+};
+
+function spawnForRegion(worldId: WorldId): { x: number; y: number; z: number } {
+  return REGION_SPAWNS[worldId] ?? REGION_SPAWNS.lumenfall!;
+}
+
+const LANDMARK_POSITIONS: Array<{ id: string; pos: [number, number, number] }> = [
+  { id: "lumenfall", pos: [0, 0, 0] },
+  { id: "lantern-stone", pos: [4.5, 0, -3.5] },
+  { id: "moonwood", pos: [-13, 0, -10] },
+  { id: "mysterious-portal", pos: [13, 0, -10] },
+  { id: "moon-crystals", pos: [11, 0, -8] },
+  { id: "riverbank-pier", pos: [-8, 0, 1] },
+  { id: "homestead-meadow", pos: [-6, 0, 8] }
+];
+
+function effectivePortalState(portal: PortalDefinition, questProgress: QuestProgress[]): PortalState {
+  if (portal.state === "quest-locked" && portal.requirement) {
+    const key = portal.requirement.toLowerCase().replace("complete the ", "").replace(" quest", "").replace(/\s+/g, "-");
+    const questId = QUEST_CATALOG.find((q) => q.id.startsWith(key))?.id;
+    if (questId) {
+      const qp = questProgress.find((q) => q.questId === questId);
+      if (qp?.state === "completed") return "unlocked";
+    }
+  }
+  return portal.state;
+}
+
+function portalPosition(portal: PortalDefinition): Vector3 {
+  return new Vector3(portal.position.x, portal.position.y, portal.position.z);
+}
+
 interface CameraInput {
   yaw: number;
   pitch: number;
@@ -58,9 +100,10 @@ interface PlayerControllerProps {
   onPlayerUpdate?: (update: Pick<PlayerSnapshot, "position" | "rotation" | "movement">) => void;
   onInteractKey: () => void;
   onBuildKey: () => void;
+  teleportRef?: MutableRefObject<{ x: number; y: number; z: number } | null>;
 }
 
-function PlayerController({ cameraInput, onPositionUpdate, appearance, onPlayerUpdate, onInteractKey, onBuildKey }: PlayerControllerProps) {
+function PlayerController({ cameraInput, onPositionUpdate, appearance, onPlayerUpdate, onInteractKey, onBuildKey, teleportRef }: PlayerControllerProps) {
   const body = useRef<RapierRigidBody>(null);
   const model = useRef<Group>(null);
   const { camera } = useThree();
@@ -88,6 +131,13 @@ function PlayerController({ cameraInput, onPositionUpdate, appearance, onPlayerU
 
   useFrame((_, delta) => {
     if (!body.current) return;
+    if (teleportRef?.current) {
+      const target = teleportRef.current;
+      body.current.setTranslation({ x: target.x, y: target.y, z: target.z }, true);
+      body.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      teleportRef.current = null;
+      lastPosition.current.set(target.x, target.y, target.z);
+    }
     const forward = Number(keys.current.has("w") || keys.current.has("arrowup")) - Number(keys.current.has("s") || keys.current.has("arrowdown"));
     const strafe = Number(keys.current.has("d") || keys.current.has("arrowright")) - Number(keys.current.has("a") || keys.current.has("arrowleft"));
     const input = new Vector3(strafe, 0, -forward);
@@ -191,13 +241,13 @@ function Creature({ definition, index }: { definition: CreatureDefinition; index
   );
 }
 
-function WorldAtmosphereScene({ atmosphere }: { atmosphere: WorldAtmosphere }) {
+function WorldAtmosphereScene({ atmosphere, region }: { atmosphere: WorldAtmosphere; region: RegionDefinition }) {
   const daylight = Math.max(0, Math.sin(atmosphere.dayProgress * Math.PI * 2 - Math.PI / 2));
   const weatherDim = atmosphere.weather === "rain" ? .72 : atmosphere.weather === "cloudy" ? .84 : atmosphere.weather === "snow" ? .8 : 1;
   return (
     <>
-      <ambientLight intensity={(.3 + daylight * .4) * weatherDim} color={atmosphere.weather === "snow" ? "#c5d5df" : "#fff0d2"} />
-      <directionalLight castShadow position={[-8, 14, 6]} intensity={(.6 + daylight * 1.1) * weatherDim} color={daylight < .25 ? "#9baed2" : "#fff0ce"} />
+      <ambientLight intensity={region.ambientIntensity * (.3 + daylight * .4) * weatherDim} color={region.ambientColor} />
+      <directionalLight castShadow position={region.sunPosition} intensity={region.sunIntensity * (.6 + daylight * 1.1) * weatherDim} color={region.sunColor} />
       {atmosphere.weather === "rain" && <fog attach="fog" args={["#53616a", 8, 28]} />}
     </>
   );
@@ -428,14 +478,17 @@ function PortalMarker3D({ portal, isTargeted }: { portal: (typeof PORTAL_CATALOG
 }
 
 function LumenfallWorld({
+  worldId,
   nodeCooldowns,
   targetedId,
   homeObjects,
   inBuildMode,
   selectedFurnitureId,
   selectedObjectId,
-  onSelectObject
+  onSelectObject,
+  questProgress
 }: {
+  worldId: WorldId;
   nodeCooldowns: Record<string, number>;
   targetedId: string | null;
   homeObjects: HomeObject[];
@@ -443,72 +496,216 @@ function LumenfallWorld({
   selectedFurnitureId: string;
   selectedObjectId: string | null;
   onSelectObject: (id: string) => void;
+  questProgress: QuestProgress[];
 }) {
   const now = Date.now();
+  const region = REGION_CATALOG.find((entry) => entry.id === worldId) ?? REGION_CATALOG[0]!;
+  const isLumenfall = worldId === "lumenfall";
   return (
     <>
       {/* Terrain ground */}
       <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.1, 0]}>
         <planeGeometry args={[46, 46]} />
-        <meshStandardMaterial color="#71856c" roughness={1} />
+        <meshStandardMaterial color={region.groundColor} roughness={1} />
       </mesh>
       <RigidBody type="fixed" colliders={false}>
         <CuboidCollider args={[23, 0.1, 23]} position={[0, -0.2, 0]} />
       </RigidBody>
 
-      {/* Pathways */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 2]}>
-        <planeGeometry args={[4, 26]} />
-        <meshStandardMaterial color="#b7a27b" roughness={1} />
-      </mesh>
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -2]}>
-        <planeGeometry args={[26, 3.4]} />
-        <meshStandardMaterial color="#b7a27b" roughness={1} />
-      </mesh>
-
-      {/* River water */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[-8, 0.04, 1]}>
-        <planeGeometry args={[8, 3.5]} />
-        <meshStandardMaterial color="#6f9e99" roughness={0.3} metalness={0.15} />
-      </mesh>
-
-      {/* Town Center Tavern / Hearth structure */}
-      <group position={[0, 0, -4]}>
-        <mesh castShadow position={[0, 1.25, 0]}>
-          <boxGeometry args={[5, 2.5, 3.2]} />
-          <meshStandardMaterial color="#6e5844" roughness={1} />
-        </mesh>
-        <mesh castShadow position={[0, 3, 0]} rotation={[0, Math.PI / 4, 0]}>
-          <coneGeometry args={[3.4, 2, 4]} />
-          <meshStandardMaterial color="#7d4f43" roughness={0.9} />
-        </mesh>
-        <mesh castShadow position={[0, 1.6, 1.62]}>
-          <boxGeometry args={[0.9, 1.4, 0.1]} />
-          <meshStandardMaterial color="#273b38" emissive="#152522" emissiveIntensity={0.5} />
-        </mesh>
-      </group>
-
-      {/* Lantern Stone Monolith */}
-      <group position={[4.5, 0, -3.5]}>
-        <mesh castShadow position={[0, 0.7, 0]}>
-          <cylinderGeometry args={[0.6, 0.8, 1.4, 8]} />
-          <meshStandardMaterial color="#7e8990" roughness={0.95} />
-        </mesh>
-        <pointLight color="#f3c977" intensity={2.2} distance={6} position={[0, 1.8, 0]} />
-        <mesh position={[0, 1.85, 0]}>
-          <sphereGeometry args={[0.22, 14, 10]} />
-          <meshStandardMaterial color="#ffe9a8" emissive="#f2b85d" emissiveIntensity={2.5} />
-        </mesh>
-        {targetedId === "lantern-stone" && (
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-            <ringGeometry args={[1, 1.15, 24]} />
-            <meshStandardMaterial color="#d1b56b" emissive="#d1b56b" emissiveIntensity={1.4} />
+      {isLumenfall && (
+        <>
+          {/* Pathways */}
+          <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 2]}>
+            <planeGeometry args={[4, 26]} />
+            <meshStandardMaterial color="#b7a27b" roughness={1} />
           </mesh>
-        )}
-      </group>
+          <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, -2]}>
+            <planeGeometry args={[26, 3.4]} />
+            <meshStandardMaterial color="#b7a27b" roughness={1} />
+          </mesh>
+
+          {/* River water */}
+          <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[-8, 0.04, 1]}>
+            <planeGeometry args={[8, 3.5]} />
+            <meshStandardMaterial color="#6f9e99" roughness={0.3} metalness={0.15} />
+          </mesh>
+
+          {/* Town Center Tavern / Hearth structure */}
+          <group position={[0, 0, -4]}>
+            <mesh castShadow position={[0, 1.25, 0]}>
+              <boxGeometry args={[5, 2.5, 3.2]} />
+              <meshStandardMaterial color="#6e5844" roughness={1} />
+            </mesh>
+            <mesh castShadow position={[0, 3, 0]} rotation={[0, Math.PI / 4, 0]}>
+              <coneGeometry args={[3.4, 2, 4]} />
+              <meshStandardMaterial color="#7d4f43" roughness={0.9} />
+            </mesh>
+            <mesh castShadow position={[0, 1.6, 1.62]}>
+              <boxGeometry args={[0.9, 1.4, 0.1]} />
+              <meshStandardMaterial color="#273b38" emissive="#152522" emissiveIntensity={0.5} />
+            </mesh>
+          </group>
+
+          {/* Lantern Stone Monolith */}
+          <group position={[4.5, 0, -3.5]}>
+            <mesh castShadow position={[0, 0.7, 0]}>
+              <cylinderGeometry args={[0.6, 0.8, 1.4, 8]} />
+              <meshStandardMaterial color="#7e8990" roughness={0.95} />
+            </mesh>
+            <pointLight color="#f3c977" intensity={2.2} distance={6} position={[0, 1.8, 0]} />
+            <mesh position={[0, 1.85, 0]}>
+              <sphereGeometry args={[0.22, 14, 10]} />
+              <meshStandardMaterial color="#ffe9a8" emissive="#f2b85d" emissiveIntensity={2.5} />
+            </mesh>
+            {targetedId === "lantern-stone" && (
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+                <ringGeometry args={[1, 1.15, 24]} />
+                <meshStandardMaterial color="#d1b56b" emissive="#d1b56b" emissiveIntensity={1.4} />
+              </mesh>
+            )}
+          </group>
+
+          {/* Fixed collider for tavern */}
+          <RigidBody type="fixed" colliders={false}>
+            <CuboidCollider args={[2.5, 1.2, 1.6]} position={[0, 1.2, -4]} />
+          </RigidBody>
+          {/* Fixed collider for lantern stone */}
+          <RigidBody type="fixed" colliders={false}>
+            <CuboidCollider args={[0.75, 0.7, 0.75]} position={[4.5, 0.7, -3.5]} />
+          </RigidBody>
+        </>
+      )}
+
+      {worldId === "moonwood" && (
+        <>
+          {/* Moonwood: Glowing mushroom clusters */}
+          <group position={[-6, 0, -6]}>
+            <mesh castShadow position={[0, 0.8, 0]}>
+              <sphereGeometry args={[0.45, 8, 6]} />
+              <meshStandardMaterial color="#9fd8a8" emissive="#9fd8a8" emissiveIntensity={0.8} />
+            </mesh>
+            <mesh castShadow position={[-0.5, 0.4, -0.3]}>
+              <sphereGeometry args={[0.3, 8, 6]} />
+              <meshStandardMaterial color="#9fd8a8" emissive="#9fd8a8" emissiveIntensity={0.6} />
+            </mesh>
+            <mesh castShadow position={[0.5, 0.4, 0.3]}>
+              <sphereGeometry args={[0.3, 8, 6]} />
+              <meshStandardMaterial color="#9fd8a8" emissive="#9fd8a8" emissiveIntensity={0.6} />
+            </mesh>
+          </group>
+          <group position={[5, 0, -8]}>
+            <mesh castShadow position={[0, 1.0, 0]}>
+              <sphereGeometry args={[0.5, 8, 6]} />
+              <meshStandardMaterial color="#a8e8c8" emissive="#a8e8c8" emissiveIntensity={0.9} />
+            </mesh>
+            <mesh castShadow position={[0, 0.3, 0]}>
+              <cylinderGeometry args={[0.12, 0.18, 0.5, 6]} />
+              <meshStandardMaterial color="#8a9bb5" roughness={0.9} />
+            </mesh>
+          </group>
+          <group position={[8, 0, 3]}>
+            <mesh castShadow position={[0, 0.9, 0]}>
+              <sphereGeometry args={[0.38, 8, 6]} />
+              <meshStandardMaterial color="#9fd8a8" emissive="#9fd8a8" emissiveIntensity={0.7} />
+            </mesh>
+            <mesh castShadow position={[0, 0.25, 0]}>
+              <cylinderGeometry args={[0.1, 0.15, 0.4, 6]} />
+              <meshStandardMaterial color="#8a9bb5" roughness={0.9} />
+            </mesh>
+          </group>
+
+          {/* Moonwood: Silver-barked tree trunks */}
+          <group position={[-10, 0, 4]}>
+            <mesh castShadow position={[0, 0.9, 0]}>
+              <cylinderGeometry args={[0.22, 0.32, 1.8, 8]} />
+              <meshStandardMaterial color="#a8b8c8" roughness={0.9} />
+            </mesh>
+            <mesh castShadow position={[0, 2.0, 0]}>
+              <dodecahedronGeometry args={[0.65, 1]} />
+              <meshStandardMaterial color="#9fd8a8" emissive="#9fd8a8" emissiveIntensity={0.5} />
+            </mesh>
+          </group>
+          <group position={[12, 0, 6]}>
+            <mesh castShadow position={[0, 1.0, 0]}>
+              <cylinderGeometry args={[0.2, 0.3, 2.0, 8]} />
+              <meshStandardMaterial color="#a8b8c8" roughness={0.9} />
+            </mesh>
+            <mesh castShadow position={[0, 2.2, 0]}>
+              <dodecahedronGeometry args={[0.55, 1]} />
+              <meshStandardMaterial color="#a8e8c8" emissive="#a8e8c8" emissiveIntensity={0.4} />
+            </mesh>
+          </group>
+
+          {/* Moonwood: Moonlight pool */}
+          <group position={[-8, 0, 10]}>
+            <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+              <ringGeometry args={[1.2, 2.0, 16]} />
+              <meshStandardMaterial color="#b8d8f8" emissive="#b8d8f8" emissiveIntensity={0.5} roughness={0.1} metalness={0.6} />
+            </mesh>
+            <pointLight color="#b8d8f8" intensity={1.2} distance={5} position={[0, 0.3, 0]} />
+          </group>
+        </>
+      )}
+
+      {worldId === "astral-vale" && (
+        <>
+          {/* Astral Vale: Crystal spires */}
+          <group position={[-7, 0, -7]}>
+            <mesh castShadow position={[0, 1.2, 0]} rotation={[0, 0.4, 0]}>
+              <octahedronGeometry args={[0.5, 0]} />
+              <meshStandardMaterial color="#c8b8e8" emissive="#c8b8e8" emissiveIntensity={0.9} roughness={0.2} metalness={0.5} />
+            </mesh>
+            <mesh castShadow position={[0, 0.6, 0]}>
+              <octahedronGeometry args={[0.3, 0]} />
+              <meshStandardMaterial color="#c8b8e8" emissive="#c8b8e8" emissiveIntensity={0.6} roughness={0.2} metalness={0.5} />
+            </mesh>
+          </group>
+          <group position={[6, 0, -5]}>
+            <mesh castShadow position={[0, 1.4, 0]} rotation={[0, -0.3, 0]}>
+              <octahedronGeometry args={[0.6, 0]} />
+              <meshStandardMaterial color="#d8c8e8" emissive="#d8c8e8" emissiveIntensity={1.0} roughness={0.2} metalness={0.5} />
+            </mesh>
+            <mesh castShadow position={[0, 0.7, 0]}>
+              <octahedronGeometry args={[0.25, 0]} />
+              <meshStandardMaterial color="#d8c8e8" emissive="#d8c8e8" emissiveIntensity={0.5} roughness={0.2} metalness={0.5} />
+            </mesh>
+          </group>
+
+          {/* Astral Vale: Floating star platforms */}
+          <group position={[9, 0, 8]}>
+            <mesh castShadow position={[0, 1.5, 0]}>
+              <sphereGeometry args={[0.25, 8, 6]} />
+              <meshStandardMaterial color="#e8c8f8" emissive="#e8c8f8" emissiveIntensity={0.7} />
+            </mesh>
+            <mesh castShadow position={[-0.4, 1.5, 0.4]}>
+              <sphereGeometry args={[0.2, 8, 6]} />
+              <meshStandardMaterial color="#e8c8f8" emissive="#e8c8f8" emissiveIntensity={0.6} />
+            </mesh>
+          </group>
+          <group position={[-10, 0, 9]}>
+            <mesh castShadow position={[0, 1.5, 0]}>
+              <sphereGeometry args={[0.25, 8, 6]} />
+              <meshStandardMaterial color="#e8c8f8" emissive="#e8c8f8" emissiveIntensity={0.7} />
+            </mesh>
+            <mesh castShadow position={[0.4, 1.5, -0.4]}>
+              <sphereGeometry args={[0.2, 8, 6]} />
+              <meshStandardMaterial color="#e8c8f8" emissive="#e8c8f8" emissiveIntensity={0.6} />
+            </mesh>
+          </group>
+
+          {/* Astral Vale: Starlight pool */}
+          <group position={[0, 0, -10]}>
+            <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+              <ringGeometry args={[1.0, 1.8, 16]} />
+              <meshStandardMaterial color="#fff0c8" emissive="#fff0c8" emissiveIntensity={0.6} roughness={0.1} metalness={0.7} />
+            </mesh>
+            <pointLight color="#fff0c8" intensity={1.5} distance={6} position={[0, 0.5, 0]} />
+          </group>
+        </>
+      )}
 
       {/* Resource Nodes in 3D */}
-      {RESOURCE_NODES.map((node) => {
+      {RESOURCE_NODES.filter((node) => node.region === worldId).map((node) => {
         const readyAt = nodeCooldowns[node.id] ?? 0;
         const isDepleted = now < readyAt;
         const cooldownRemaining = Math.max(0, Math.ceil((readyAt - now) / 1000));
@@ -524,14 +721,17 @@ function LumenfallWorld({
       })}
 
       {/* NPCs */}
-      {NPC_CATALOG.map((npc) => (
+      {NPC_CATALOG.filter((npc) => npc.location === worldId).map((npc) => (
         <NpcMarker3D key={npc.id} npc={npc} isTargeted={targetedId === npc.id} />
       ))}
 
       {/* Portals */}
-      {PORTAL_CATALOG.map((portal) => (
-        <PortalMarker3D key={portal.id} portal={portal} isTargeted={targetedId === portal.id} />
-      ))}
+      {PORTAL_CATALOG.filter((portal) => portal.region === worldId).map((portal) => {
+        const effectivePortal = { ...portal, state: effectivePortalState(portal, questProgress) };
+        return (
+          <PortalMarker3D key={portal.id} portal={effectivePortal} isTargeted={targetedId === portal.id} />
+        );
+      })}
 
       {/* Home / Building Area */}
       <HomeArea3D
@@ -541,14 +741,6 @@ function LumenfallWorld({
         selectedObjectId={selectedObjectId}
         onSelectObject={onSelectObject}
       />
-
-      {/* Fixed colliders */}
-      <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[2.5, 1.2, 1.6]} position={[0, 1.2, -4]} />
-      </RigidBody>
-      <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[0.75, 0.7, 0.75]} position={[4.5, 0.7, -3.5]} />
-      </RigidBody>
     </>
   );
 }
@@ -568,9 +760,12 @@ function WorldScene({
   targetedId,
   inBuildMode,
   selectedFurnitureId,
-  selectedObjectId,
-  onSelectObject
-}: PlayerControllerProps & {
+   selectedObjectId,
+   onSelectObject,
+   worldId,
+   teleportRef,
+   questProgress
+ }: PlayerControllerProps & {
   remotePlayers: PlayerSnapshot[];
   homeObjects: HomeObject[];
   atmosphere: WorldAtmosphere;
@@ -581,15 +776,20 @@ function WorldScene({
   selectedFurnitureId: string;
   selectedObjectId: string | null;
   onSelectObject: (id: string) => void;
+  worldId: WorldId;
+  teleportRef?: MutableRefObject<{ x: number; y: number; z: number } | null>;
+  questProgress: QuestProgress[];
 }) {
+  const region = REGION_CATALOG.find((entry) => entry.id === worldId) ?? REGION_CATALOG[0]!;
   return (
     <>
-      <color attach="background" args={["#9fb5aa"]} />
-      <fog attach="fog" args={["#9fb5aa", 18, 42]} />
-      <Sky distance={450000} sunPosition={[-5, 7, -4]} inclination={0.48} azimuth={0.22} turbidity={8} rayleigh={1.6} />
-      <WorldAtmosphereScene atmosphere={atmosphere} />
+      <color attach="background" args={[region.skyColor]} />
+      <fog attach="fog" args={[region.fogColor, region.fogNear, region.fogFar]} />
+      <Sky distance={450000} sunPosition={region.sunPosition} inclination={0.48} azimuth={0.22} turbidity={8} rayleigh={1.6} />
+      <WorldAtmosphereScene atmosphere={atmosphere} region={region} />
       <Physics gravity={[0, -16, 0]}>
         <LumenfallWorld
+          worldId={worldId}
           nodeCooldowns={nodeCooldowns}
           targetedId={targetedId}
           homeObjects={homeObjects}
@@ -597,6 +797,7 @@ function WorldScene({
           selectedFurnitureId={selectedFurnitureId}
           selectedObjectId={selectedObjectId}
           onSelectObject={onSelectObject}
+          questProgress={questProgress}
         />
         <PlayerController
           cameraInput={cameraInput}
@@ -605,11 +806,12 @@ function WorldScene({
           onPlayerUpdate={onPlayerUpdate}
           onInteractKey={onInteractKey}
           onBuildKey={onBuildKey}
+          teleportRef={teleportRef}
         />
         {remotePlayers.map((player) => (
           <RemotePlayer key={player.id} player={player} emote={emotes[player.id]} />
         ))}
-        {CREATURE_CATALOG.flatMap((definition) =>
+        {CREATURE_CATALOG.filter((definition) => definition.region === worldId).flatMap((definition) =>
           definition.spawn.map((_, index) => <Creature key={`${definition.id}-${index}`} definition={definition} index={index} />)
         )}
       </Physics>
@@ -621,6 +823,7 @@ export default function LumenfallScene() {
   const cameraInput = useRef<CameraInput>({ yaw: 0, pitch: 0 });
   const drag = useRef({ active: false, x: 0, y: 0 });
   const playerPos = useRef<Vector3>(new Vector3(0, 1.2, 7));
+  const teleportRef = useRef<{ x: number; y: number; z: number } | null>(null);
 
   const [notice, setNotice] = useState("");
   const [activePrompt, setActivePrompt] = useState<{ id: string; label: string; action: () => void } | null>(null);
@@ -647,7 +850,11 @@ export default function LumenfallScene() {
     onHomeChange: multiplayer.updateHome,
     onProfileSync: multiplayer.syncProfile
   });
-  const worldId = multiplayer.session?.worldId ?? "lumenfall";
+  const [worldId, setWorldId] = useState<WorldId>(() => (multiplayer.session?.worldId as WorldId) ?? "lumenfall");
+  useEffect(() => {
+    if (!multiplayer.session) setWorldId("lumenfall");
+  }, [multiplayer.session]);
+  const activeRegion = REGION_CATALOG.find((entry) => entry.id === worldId) ?? REGION_CATALOG[0]!;
   const { settings: audioSettings, updateSettings: updateAudioSettings } = useGameAudio(worldId, atmosphere.dayProgress, atmosphere.weather);
 
   const { harvestNode, discover, placeFurnitureAt, rotateFurniture, deleteFurniture } = systems;
@@ -681,16 +888,11 @@ export default function LumenfallScene() {
     (pos: Vector3) => {
       playerPos.current.copy(pos);
 
-      // Check landmarks for discoveries
-      const landmarks: Array<{ id: string; pos: [number, number, number] }> = [
-        { id: "lumenfall", pos: [0, 0, 0] },
-        { id: "lantern-stone", pos: [4.5, 0, -3.5] },
-        { id: "moonwood", pos: [-13, 0, -10] },
-        { id: "mysterious-portal", pos: [13, 0, -10] },
-        { id: "moon-crystals", pos: [11, 0, -8] },
-        { id: "riverbank-pier", pos: [-8, 0, 1] },
-        { id: "homestead-meadow", pos: [-6, 0, 8] }
-      ];
+      // Check landmarks for discoveries — filtered to active region
+      const landmarks = LANDMARK_POSITIONS.filter((landmark) => {
+        const entry = DISCOVERY_CATALOG.find((d) => d.id === landmark.id);
+        return entry?.region === worldId;
+      });
 
       for (const landmark of landmarks) {
         const landmarkPos = new Vector3(...landmark.pos);
@@ -711,7 +913,7 @@ export default function LumenfallScene() {
       let minDistance = INTERACTION_DISTANCE;
 
       // 1. Resource Nodes
-      for (const node of RESOURCE_NODES) {
+      for (const node of RESOURCE_NODES.filter((n) => n.region === worldId)) {
         const nodePos = new Vector3(...node.position);
         const dist = pos.distanceTo(nodePos);
         if (dist <= minDistance) {
@@ -730,7 +932,7 @@ export default function LumenfallScene() {
       }
 
       // 2. NPCs
-      for (const npc of NPC_CATALOG) {
+      for (const npc of NPC_CATALOG.filter((n) => n.location === worldId)) {
         const npcPos = new Vector3(npc.position.x, npc.position.y, npc.position.z);
         const dist = pos.distanceTo(npcPos);
         if (dist <= minDistance) {
@@ -748,8 +950,8 @@ export default function LumenfallScene() {
         }
       }
 
-      // 3. Lantern Stone Monolith
-      if (pos.distanceTo(LANTERN_STONE_POS) <= minDistance) {
+      // 3. Lantern Stone Monolith (Lumenfall only)
+      if (worldId === "lumenfall" && pos.distanceTo(LANTERN_STONE_POS) <= minDistance) {
         minDistance = pos.distanceTo(LANTERN_STONE_POS);
         closest = {
           id: "lantern-stone",
@@ -764,8 +966,9 @@ export default function LumenfallScene() {
       }
 
       // 4. Portals
-      for (const portal of PORTAL_CATALOG) {
-        const portalPos = new Vector3(portal.position.x, portal.position.y, portal.position.z);
+      for (const portal of PORTAL_CATALOG.filter((p) => p.region === worldId)) {
+        const effectiveState = effectivePortalState(portal, systems.quests);
+        const portalPos = portalPosition(portal);
         const dist = pos.distanceTo(portalPos);
         if (dist <= minDistance) {
           minDistance = dist;
@@ -773,12 +976,20 @@ export default function LumenfallScene() {
             id: portal.id,
             label: `Enter ${portal.name}`,
             action: () => {
-              if (portal.state === "unlocked") {
-                discover("moonwood");
+              if (effectiveState === "unlocked") {
+                if (DISCOVERY_CATALOG.some((d) => d.id === portal.destination)) {
+                  discover(portal.destination);
+                }
+                setWorldId(portal.destination);
+                const spawn = spawnForRegion(portal.destination);
+                teleportRef.current = { x: spawn.x, y: spawn.y, z: spawn.z };
                 playSfx("portal-travel");
-                setNotice("You step toward the Moonwood portal. The ancient leaves rustle in greeting.");
+                const destRegion = REGION_CATALOG.find((r) => r.id === portal.destination);
+                setNotice(`You step through the ${portal.name}. The world shifts around you into ${destRegion?.name ?? portal.destination}.`);
+              } else if (effectiveState === "quest-locked") {
+                setNotice(`The ${portal.name} remains sealed. ${portal.requirement ?? "A quest must be completed first."}`);
               } else {
-                setNotice("The quiet portal remains sealed by ancient starlight.");
+                setNotice("The portal remains sealed by ancient starlight.");
               }
               window.setTimeout(() => setNotice(""), 3200);
             }
@@ -788,7 +999,7 @@ export default function LumenfallScene() {
 
       setActivePrompt(closest);
     },
-    [discover, harvestNode, multiplayer, systems.progression.discoveredLocations]
+    [discover, harvestNode, multiplayer, systems.progression.discoveredLocations, systems.quests, worldId]
   );
 
   const handleInteractKey = useCallback(() => {
@@ -864,8 +1075,11 @@ export default function LumenfallScene() {
           inBuildMode={inBuildMode}
           selectedFurnitureId={selectedFurnitureId}
           selectedObjectId={selectedObjectId}
-          onSelectObject={(id) => setSelectedObjectId(id)}
-        />
+           onSelectObject={(id) => setSelectedObjectId(id)}
+           worldId={worldId}
+           teleportRef={teleportRef}
+           questProgress={systems.quests}
+         />
       </Canvas>
 
       <div className={`scene-ui ${photoMode ? "photo-mode" : ""}`}>
@@ -874,7 +1088,7 @@ export default function LumenfallScene() {
             AFTERLIGHT<small>LUMENFALL CHAPTER · LEVEL {systems.progression.level}</small>
           </div>
           <div className="location">
-            <strong>Lumenfall</strong>
+            <strong>{activeRegion.name}</strong>
             <span>
               {timeData.timeString} · {timeData.phase} · {atmosphere.weather}
             </span>
