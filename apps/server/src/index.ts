@@ -1,7 +1,7 @@
 import { createServer, type IncomingMessage } from "node:http";
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Socket } from "node:net";
-import { createDefaultAppearance, type CharacterAppearance, type HomeState, type MovementState, type PlayerId, type PlayerSnapshot, type RealtimeMessage, type SessionDescriptor } from "@afterlight/shared";
+import { EMOTE_CATALOG, createDefaultAppearance, type CharacterAppearance, type HomeState, type MovementState, type PlayerId, type PlayerSnapshot, type RealtimeMessage, type SessionDescriptor } from "@afterlight/shared";
 import { acceptWebSocket, type WebSocketPeer } from "./websocket.js";
 
 const port = Number(process.env.PORT ?? 3001);
@@ -224,7 +224,7 @@ function handleMessage(peer: WebSocketPeer, raw: string): void {
   }
   if (message.type === "home.update") {
     const ownerId = player.session.home?.ownerId ?? player.id;
-    const role = message.state.permissions[player.id] ?? player.session.home?.permissions[player.id] ?? "visitor";
+    const role = player.session.home?.permissions[player.id] ?? (player.id === ownerId ? "owner" : "visitor");
     if (message.state.ownerId !== ownerId || !["owner", "co-owner", "builder", "decorator"].includes(role)) {
       error(peer, undefined, "not_member", "You do not have permission to edit this home.");
       return;
@@ -239,14 +239,16 @@ function handleMessage(peer: WebSocketPeer, raw: string): void {
       },
       rotation: finite(object.rotation, 0)
     }));
-    const permissions = { ...(player.session.home?.permissions ?? {}), ...message.state.permissions, [ownerId]: "owner" as const };
+    const permissions = player.id === ownerId
+      ? { ...(player.session.home?.permissions ?? {}), ...message.state.permissions, [ownerId]: "owner" as const }
+      : { ...(player.session.home?.permissions ?? {}), [ownerId]: "owner" as const };
     const home = { ownerId, objects, permissions, revision: (player.session.home?.revision ?? 0) + 1 };
     player.session.home = home;
     broadcast(player.session, { type: "home.updated", ownerId: player.id, state: home });
     return;
   }
   if (message.type === "player.emote") {
-    if (message.emote.length <= 24) broadcast(player.session, { type: "player.emote", playerId: player.id, emote: message.emote }, peer);
+    if (EMOTE_CATALOG.some((emote) => emote.id === message.emote)) broadcast(player.session, { type: "player.emote", playerId: player.id, emote: message.emote }, peer);
   }
 }
 

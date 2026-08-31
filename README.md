@@ -2,7 +2,7 @@
 
 Afterlight is a stylized multiplayer 3D fantasy world where friends explore, build, craft, cook, discover hidden worlds, and create their own adventures.
 
-The repository is being built phase by phase. Phase 3 is the current implementation focus, and GitHub is the source of truth.
+The repository is being built in coherent feature batches. GitHub is the source of truth.
 
 ## Feature status
 
@@ -18,18 +18,20 @@ The repository is being built phase by phase. Phase 3 is the current implementat
 | Data-driven character creator | Implemented |
 | Browser appearance save/load | Implemented (temporary) |
 | Multiplayer rooms | Implemented (private Phase 3 milestone) |
-| Persistent homes | Planned |
-| Inventory, crafting, and cooking | Planned |
-| Quests and NPCs | Planned |
-| Moonwood exploration | Planned |
-| Voice chat | Planned |
-| Progression and achievements | Planned |
+| Persistent homes | Foundation implemented (browser save + session sync) |
+| Inventory, crafting, and cooking | Foundation implemented (catalogs + browser state) |
+| Quests and NPCs | Foundation implemented (progress tracking + scheduled dialogue) |
+| Moonwood exploration | Foundation implemented (trail, discoveries, portal markers) |
+| Voice chat | Planned; transport boundary not yet connected |
+| Progression and achievements | Foundation implemented (XP/level + discovery progress) |
 
 ## Current phase
 
 **Phase 2 complete.** The web client has a small playable Lumenfall scene and a data-driven placeholder humanoid whose appearance can be edited live and saved or loaded in the browser.
 
-**Phase 3 in progress.** The first private-session milestone is implemented: create or join a 2–8 player invite-only room, see shared player avatars and names, synchronize movement/rotation/basic movement state, leave, and reconnect after a short disconnect. The realtime server is standalone and authoritative for room membership and movement bounds.
+**Phase 3 complete.** Create or join a 2–8 player invite-only room, see shared player avatars and names, synchronize movement/rotation/basic movement state, leave, and reconnect after a short disconnect. The realtime server is standalone and authoritative for room membership and movement bounds.
+
+**Phases 4–11 foundations implemented in batch.** Homes can be edited with role-aware furniture placement and synchronized through the private room. The field journal exposes actual gathering, inventory stacking, recipes, crafting, quest progress, NPC dialogue, discovery state, creatures, atmosphere, emotes, and a UI photo mode. These are deliberately lightweight foundations: browser storage remains provisional, the world uses placeholder geometry, and Moonwood is represented by a discoverable trail and portal marker rather than a second streamed region.
 
 ## Tech stack
 
@@ -96,14 +98,14 @@ The current character is geometric placeholder art. Character appearance persist
 1. Phase 0: foundation and contracts
 2. Phase 1: small, detailed 3D Lumenfall environment
 3. Phase 2: data-driven character creator and provisional save/load
-4. Phase 3: private multiplayer sessions (current)
-5. Phase 4: persistent homes and cooperative building
-6. Phase 5: inventory, crafting, cooking, quests, and NPCs
-7. Phase 6: Moonwood exploration and discovery
-8. Phase 7: social systems, voice architecture, and photo mode
-9. Phase 8: progression
-10. Phase 9: mobile gameplay
-11. Phase 10: optimization
+4. Phase 3: private multiplayer sessions (complete)
+5. Phase 4: persistent homes and cooperative building (foundation)
+6. Phase 5: inventory, crafting, cooking, quests, and NPCs (foundation)
+7. Phase 6: Moonwood exploration and discovery (foundation)
+8. Phase 7: social systems and photo mode (foundation; voice pending)
+9. Phase 8: progression and achievements (foundation)
+10. Phase 9: mobile gameplay (shared-contract foundation)
+11. Phase 10: optimization and durable persistence (next)
 
 ## Contributing
 

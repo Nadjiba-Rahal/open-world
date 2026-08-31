@@ -29,6 +29,10 @@ export interface DiscoveryDefinition { id: string; name: string; type: Discovery
 export type PortalState = "unlocked" | "quest-locked" | "discovery-locked" | "mysterious";
 export interface PortalDefinition { id: string; name: string; destination: WorldId; position: { x: number; y: number; z: number }; state: PortalState; requirement?: string; }
 export interface ProgressionState { experience: number; level: number; achievements: string[]; discoveredRecipes: string[]; discoveredLocations: string[]; collectibles: string[]; }
+export type EmoteId = "wave" | "sit" | "dance" | "clap" | "bow" | "laugh" | "point" | "celebrate" | "sleep";
+export interface EmoteDefinition { id: EmoteId; name: string; symbol: string; }
+export interface CreatureDefinition { id: string; name: string; color: string; size: number; speed: number; spawn: { x: number; y: number; z: number }[]; }
+export interface AchievementDefinition { id: string; name: string; description: string; }
 export type WeatherKind = "clear" | "cloudy" | "rain" | "snow";
 export interface WorldAtmosphere { dayProgress: number; weather: WeatherKind; }
 export interface PlayerSnapshot {
@@ -212,6 +216,28 @@ export const NPC_CATALOG: NpcDefinition[] = [
 export const PORTAL_CATALOG: PortalDefinition[] = [
   { id: "moonwood-gate", name: "Moonwood trail", destination: "moonwood", position: [-13, 0, -10], state: "unlocked" },
   { id: "mystery-gate", name: "The quiet portal", destination: "mystery", position: [13, 0, -10], state: "mysterious", requirement: "A discovery still has no name." }
+];
+
+export const EMOTE_CATALOG: EmoteDefinition[] = [
+  { id: "wave", name: "Wave", symbol: "👋" }, { id: "sit", name: "Sit", symbol: "◡" },
+  { id: "dance", name: "Dance", symbol: "✧" }, { id: "clap", name: "Clap", symbol: "👏" },
+  { id: "bow", name: "Bow", symbol: "⌄" }, { id: "laugh", name: "Laugh", symbol: "☼" },
+  { id: "point", name: "Point", symbol: "→" }, { id: "celebrate", name: "Celebrate", symbol: "✦" },
+  { id: "sleep", name: "Sleep", symbol: "z" }
+];
+
+export const CREATURE_CATALOG: CreatureDefinition[] = [
+  { id: "moss-rabbit", name: "Moss rabbit", color: "#b4c68e", size: .28, speed: .7, spawn: [{ x: -8, y: 0, z: 9 }, { x: 8, y: 0, z: 8 }] },
+  { id: "river-otter", name: "River otter", color: "#795b4d", size: .34, speed: .45, spawn: [{ x: -8, y: 0, z: 1 }, { x: -9, y: 0, z: 2 }] },
+  { id: "lantern-moth", name: "Lantern moth", color: "#e1b96f", size: .12, speed: .9, spawn: [{ x: 4, y: 1.8, z: -3 }, { x: 5, y: 2.1, z: -3 }] },
+  { id: "stone-tortoise", name: "Stone tortoise", color: "#7c8881", size: .42, speed: .18, spawn: [{ x: 10, y: 0, z: 10 }] }
+];
+
+export const ACHIEVEMENT_CATALOG: AchievementDefinition[] = [
+  { id: "first-steps", name: "First steps", description: "Arrive in Lumenfall." },
+  { id: "gatherer", name: "A generous handful", description: "Gather your first resource." },
+  { id: "maker", name: "Make something", description: "Craft your first recipe." },
+  { id: "wayfinder", name: "Wayfinder", description: "Discover a new location." }
 ];
 
 export function createEmptyInventory(): InventorySlot[] { return []; }

@@ -3,7 +3,7 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Physics, RigidBody, CapsuleCollider, CuboidCollider, type RapierRigidBody } from "@react-three/rapier";
 import { Sky, Text } from "@react-three/drei";
-import { NPC_CATALOG, createDefaultAppearance, FURNITURE_CATALOG, type CharacterAppearance, type HomeObject, type MovementState, type NpcDefinition, type PlayerId, type PlayerSnapshot } from "@afterlight/shared";
+import { CREATURE_CATALOG, EMOTE_CATALOG, NPC_CATALOG, createDefaultAppearance, FURNITURE_CATALOG, type CharacterAppearance, type CreatureDefinition, type EmoteId, type HomeObject, type MovementState, type NpcDefinition, type PlayerId, type PlayerSnapshot, type WorldAtmosphere } from "@afterlight/shared";
 import { npcStateAt } from "@afterlight/game-core";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject, type PointerEvent as ReactPointerEvent } from "react";
 import type { Group, PerspectiveCamera } from "three";
@@ -108,7 +108,7 @@ function PlayerController({ cameraInput, onInteract, appearance, onPlayerUpdate 
   );
 }
 
-function RemotePlayer({ player }: { player: PlayerSnapshot }) {
+function RemotePlayer({ player, emote }: { player: PlayerSnapshot; emote?: EmoteId }) {
   const model = useRef<Group>(null);
   const target = useRef(new Vector3(player.position.x, player.position.y, player.position.z));
   const phase = useRef((player.id.charCodeAt(0) % 10) / 10);
@@ -130,10 +130,48 @@ function RemotePlayer({ player }: { player: PlayerSnapshot }) {
   return (
     <group ref={model} position={[player.position.x, player.position.y, player.position.z]}>
       <CharacterAvatar appearance={player.appearance} />
-      <Text position={[0, 2.15, 0]} fontSize={0.22} color="#fff6d9" outlineColor="#17201b" outlineWidth={0.025} anchorX="center" anchorY="middle">
+      <Text position={[0, emote ? 2.65 : 2.15, 0]} fontSize={0.22} color="#fff6d9" outlineColor="#17201b" outlineWidth={0.025} anchorX="center" anchorY="middle">
         {player.displayName}
       </Text>
+      {emote && <Text position={[0, 2.4, 0]} fontSize={.34} color="#e6c983" outlineColor="#17201b" outlineWidth={.02} anchorX="center">{EMOTE_CATALOG.find((entry) => entry.id === emote)?.symbol ?? "✦"}</Text>}
     </group>
+  );
+}
+
+function Creature({ definition, index }: { definition: CreatureDefinition; index: number }) {
+  const ref = useRef<Group>(null);
+  const origin = definition.spawn[index % definition.spawn.length] ?? definition.spawn[0];
+  useFrame(({ clock }) => {
+    if (!ref.current || !origin) return;
+    const t = clock.elapsedTime * definition.speed + index * 2.3;
+    ref.current.position.x = origin.x + Math.sin(t) * (definition.id === "lantern-moth" ? .8 : 1.4);
+    ref.current.position.y = origin.y + (definition.id === "lantern-moth" ? Math.sin(t * 1.7) * .25 : 0);
+    ref.current.position.z = origin.z + Math.cos(t * .72) * (definition.id === "lantern-moth" ? .6 : .9);
+    ref.current.rotation.y = Math.atan2(Math.cos(t), -Math.sin(t));
+  });
+  return (
+    <group ref={ref} position={[origin?.x ?? 0, origin?.y ?? 0, origin?.z ?? 0]}>
+      <mesh castShadow position={[0, definition.size, 0]} scale={[1.3, .8, 1]}>
+        <sphereGeometry args={[definition.size, 10, 7]} />
+        <meshStandardMaterial color={definition.color} roughness={.9} emissive={definition.id === "lantern-moth" ? definition.color : "#000000"} emissiveIntensity={definition.id === "lantern-moth" ? 1.1 : 0} />
+      </mesh>
+      <mesh position={[0, definition.size * 1.8, 0]} scale={.55}>
+        <sphereGeometry args={[definition.size, 8, 6]} />
+        <meshStandardMaterial color={definition.color} roughness={.9} />
+      </mesh>
+    </group>
+  );
+}
+
+function WorldAtmosphere({ atmosphere }: { atmosphere: WorldAtmosphere }) {
+  const daylight = Math.max(0, Math.sin(atmosphere.dayProgress * Math.PI * 2 - Math.PI / 2));
+  const weatherDim = atmosphere.weather === "rain" ? .72 : atmosphere.weather === "cloudy" ? .84 : atmosphere.weather === "snow" ? .8 : 1;
+  return (
+    <>
+      <ambientLight intensity={(.3 + daylight * .35) * weatherDim} color={atmosphere.weather === "snow" ? "#c5d5df" : "#fff0d2"} />
+      <directionalLight castShadow position={[-8, 12, 6]} intensity={(.7 + daylight * .8) * weatherDim} color={daylight < .25 ? "#9baed2" : "#fff0ce"} />
+      {atmosphere.weather === "rain" && <fog attach="fog" args={["#53616a", 8, 28]} />}
+    </>
   );
 }
 
@@ -268,18 +306,18 @@ function LumenfallWorld() {
   );
 }
 
-function WorldScene({ cameraInput, onInteract, appearance, onPlayerUpdate, remotePlayers, homeObjects }: PlayerControllerProps & { remotePlayers: PlayerSnapshot[]; homeObjects: HomeObject[] }) {
+function WorldScene({ cameraInput, onInteract, appearance, onPlayerUpdate, remotePlayers, homeObjects, atmosphere, emotes }: PlayerControllerProps & { remotePlayers: PlayerSnapshot[]; homeObjects: HomeObject[]; atmosphere: WorldAtmosphere; emotes: Record<string, EmoteId> }) {
   return (
     <>
       <color attach="background" args={["#9fb5aa"]} />
       <fog attach="fog" args={["#9fb5aa", 18, 38]} />
       <Sky distance={450000} sunPosition={[-5, 7, -4]} inclination={0.48} azimuth={0.22} turbidity={8} rayleigh={1.6} />
-      <ambientLight intensity={1.1} color="#d8e1cb" />
-      <directionalLight castShadow position={[-8, 12, 6]} intensity={2.2} color="#ffe3ad" shadow-mapSize={[2048, 2048]} />
+      <WorldAtmosphere atmosphere={atmosphere} />
       <Physics gravity={[0, -16, 0]}>
         <LumenfallWorld />
         <PlayerController cameraInput={cameraInput} onInteract={onInteract} appearance={appearance} onPlayerUpdate={onPlayerUpdate} />
-        {remotePlayers.map((player) => <RemotePlayer key={player.id} player={player} />)}
+        {remotePlayers.map((player) => <RemotePlayer key={player.id} player={player} emote={emotes[player.id]} />)}
+        {CREATURE_CATALOG.flatMap((definition) => definition.spawn.map((_, index) => <Creature key={`${definition.id}-${index}`} definition={definition} index={index} />))}
         <HomeRoom objects={homeObjects} />
       </Physics>
     </>
@@ -292,6 +330,8 @@ export default function LumenfallScene() {
   const [notice, setNotice] = useState("");
   const [appearance, setAppearance] = useState<CharacterAppearance>(() => createDefaultAppearance());
   const [saved, setSaved] = useState(false);
+  const [photoMode, setPhotoMode] = useState(false);
+  const [atmosphere, setAtmosphere] = useState<WorldAtmosphere>(() => ({ dayProgress: (Date.now() % 1_200_000) / 1_200_000, weather: ["clear", "cloudy", "rain"][Math.floor(Date.now() / 300_000) % 3] as WorldAtmosphere["weather"] }));
   const multiplayer = useMultiplayerSession(appearance);
   const systems = useWorldSystems({
     ownerId: (multiplayer.selfId ?? "local-player") as PlayerId,
@@ -299,6 +339,11 @@ export default function LumenfallScene() {
     onHomeChange: multiplayer.updateHome
   });
   const { gather, discover } = systems;
+  useEffect(() => {
+    const updateAtmosphere = () => setAtmosphere({ dayProgress: (Date.now() % 1_200_000) / 1_200_000, weather: ["clear", "cloudy", "rain"][Math.floor(Date.now() / 300_000) % 3] as WorldAtmosphere["weather"] });
+    const timer = window.setInterval(updateAtmosphere, 10_000);
+    return () => window.clearInterval(timer);
+  }, []);
   const onPlayerUpdate = useCallback((update: Pick<PlayerSnapshot, "position" | "rotation" | "movement">) => {
     multiplayer.updatePlayer(update);
   }, [multiplayer.updatePlayer]);
@@ -366,12 +411,12 @@ export default function LumenfallScene() {
   }, [discover, gather]);
 
   const pointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest(".creator, .multiplayer, .systems")) return;
+    if ((event.target as HTMLElement).closest(".creator, .multiplayer, .systems, .photo-toggle")) return;
     drag.current = { active: true, x: event.clientX, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const pointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!drag.current.active || (event.target as HTMLElement).closest(".creator, .multiplayer, .systems")) return;
+    if (!drag.current.active || (event.target as HTMLElement).closest(".creator, .multiplayer, .systems, .photo-toggle")) return;
     const dx = event.clientX - drag.current.x;
     const dy = event.clientY - drag.current.y;
     drag.current.x = event.clientX;
@@ -384,12 +429,13 @@ export default function LumenfallScene() {
   return (
     <div className="scene" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
       <Canvas shadows camera={{ position: [0, 5, 15], fov: 54 }} dpr={[1, 1.75]}>
-        <WorldScene cameraInput={cameraInput} onInteract={onInteract} appearance={appearance} onPlayerUpdate={onPlayerUpdate} remotePlayers={multiplayer.players.filter((player) => player.id !== multiplayer.selfId)} homeObjects={systems.home.objects} />
+         <WorldScene cameraInput={cameraInput} onInteract={onInteract} appearance={appearance} onPlayerUpdate={onPlayerUpdate} remotePlayers={multiplayer.players.filter((player) => player.id !== multiplayer.selfId)} homeObjects={systems.home.objects} atmosphere={atmosphere} emotes={multiplayer.emotes} />
       </Canvas>
-      <div className="scene-ui">
+      <div className={`scene-ui ${photoMode ? "photo-mode" : ""}`}>
         <div className="scene-top">
           <div className="brand">AFTERLIGHT<small>PHASE 1 / LUMENFALL</small></div>
-          <div className="location"><strong>Lumenfall</strong><span>Southern approach</span></div>
+           <div className="location"><strong>Lumenfall</strong><span>Southern approach · {atmosphere.weather} · {atmosphere.dayProgress > .25 && atmosphere.dayProgress < .75 ? "day" : "night"}</span></div>
+          <button className="photo-toggle" type="button" onClick={() => setPhotoMode((value) => !value)}>{photoMode ? "Exit photo" : "Photo mode"}</button>
         </div>
         <CharacterCreator appearance={appearance} onChange={(next) => { setAppearance(next); setSaved(false); }} onSave={saveAppearance} onLoad={loadAppearance} saved={saved} />
         <MultiplayerPanel
@@ -402,7 +448,7 @@ export default function LumenfallScene() {
           onJoin={multiplayer.joinSession}
           onLeave={multiplayer.leaveSession}
         />
-        <WorldSystemsPanel systems={systems} players={multiplayer.players} onDiscoverMoonwood={() => systems.discover("moonwood")} />
+        <WorldSystemsPanel systems={systems} players={multiplayer.players} onDiscoverMoonwood={() => systems.discover("moonwood")} emotes={multiplayer.emotes} onEmote={multiplayer.sendEmote} />
         <div className="scene-bottom">
           <div className="objective"><p className="objective-label">Current thread</p><p>Find the lantern stone near the town path.</p></div>
           <div className="controls"><span className="desktop-only"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move&nbsp;&nbsp; <kbd>SHIFT</kbd> sprint&nbsp;&nbsp; <kbd>E</kbd> interact&nbsp;&nbsp;</span> drag to look</div>
